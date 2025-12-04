@@ -1,45 +1,74 @@
-import { useEffect, useState } from "react";
+// src/App.jsx
+import React from 'react';
+import { DimensionCard } from './components/DimensionCard';
+import './index.css';
+
+const DIMENSIONS = [
+  {
+    key: 'language',
+    title: '编程语言生态（Language Ecosystem）',
+    subtitle: '主流与边缘语言的在职使用与未来偏好演化。',
+  },
+  {
+    key: 'database',
+    title: '数据库技术栈（Database）',
+    subtitle: '关系型与新型数据存储的采用趋势。',
+  },
+  {
+    key: 'platform',
+    title: '平台与运行环境（Platform）',
+    subtitle: '云平台、桌面与移动端的长期分布。',
+  },
+  {
+    key: 'webframe',
+    title: 'Web 框架与框架族（Web Framework）',
+    subtitle: '从单体框架到前后端分离的演进轨迹。',
+  },
+  {
+    key: 'misctech',
+    title: '通用技术栈（Misc Tech）',
+    subtitle: '基础设施、数据与工程效率技术的渗透情况。',
+  },
+  {
+    key: 'toolstech',
+    title: '工程工具（Tools & Toolchains）',
+    subtitle: '构建、部署与质量保障工具的采用率。',
+  },
+  {
+    key: 'collabtools',
+    title: '协作与生产力工具（Collaboration）',
+    subtitle: '从代码托管到协同办公的全链路协作。',
+  },
+];
 
 function App() {
-  const [message, setMessage] = useState("正在向后端请求数据...");
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    // 这里的 URL 对应你 FastAPI 的接口，比如 /api/hello
-    fetch("http://127.0.0.1:8000/api/hello")
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error("HTTP error " + res.status);
-        }
-        return res.json();
-      })
-      .then((data) => {
-        // 假设后端返回 {"message": "..."}
-        setMessage(data.message || JSON.stringify(data));
-      })
-      .catch((err) => {
-        console.error(err);
-        setError("请求失败，请检查后端是否启动以及接口路径是否正确。");
-      });
-  }, []);
-
   return (
-    <div style={{ fontFamily: "sans-serif", padding: "24px" }}>
-      <h1>DevTrendAnalysis 前端</h1>
-      <p>下面这一行是从 FastAPI 拿到的数据：</p>
+    <div className="app-root">
+      <main className="app-shell">
+        {/* 顶部 Hero 区域 */}
+        <header className="app-hero">
+          <div>
+            <div className="badge-pill">DevTrend Observatory</div>
+            <h1 className="hero-title">工程技术栈趋势总览</h1>
+            <p className="hero-subtitle">
+              基于多年度调研样本，对不同维度的「实际使用」与「未来意向」进行对比，
+              以观察技术栈的生命周期与演化节奏。
+            </p>
+          </div>
+        </header>
 
-      <div
-        style={{
-          marginTop: "12px",
-          padding: "12px 16px",
-          borderRadius: "8px",
-          border: "1px solid #ddd",
-          display: "inline-block",
-          minWidth: "280px",
-        }}
-      >
-        {error ? <span style={{ color: "red" }}>{error}</span> : message}
-      </div>
+        {/* 一列排列：每行一个大卡片 */}
+        <section className="grid-single-column">
+          {DIMENSIONS.map((dim) => (
+            <DimensionCard
+              key={dim.key}
+              dimension={dim.key}
+              title={dim.title}
+              subtitle={dim.subtitle}
+            />
+          ))}
+        </section>
+      </main>
     </div>
   );
 }
