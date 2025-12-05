@@ -18,6 +18,7 @@ DIMENSION_TABLES: Dict[str, str] = {
     "collabtools": "collabtools_usage_trend",
 }
 
+MIN_YEARS_FOR_TREND = 3  # 至少出现 3 年才算有“趋势”
 
 def validate_dimension(dimension: str) -> str:
     dim = dimension.lower()
@@ -69,6 +70,7 @@ def get_trends_for_items(
 ) -> List[ItemTrend]:
     """
     针对给定的 item 列表，从汇总表中取出各年数据，并计算 have_ratio / want_ratio。
+    只返回“至少在 MIN_YEARS_FOR_TREND 个年份出现过”的 item。
     """
     if not items:
         return []
@@ -110,7 +112,11 @@ def get_trends_for_items(
         data_by_item.setdefault(item, []).append(point)
 
     trends: List[ItemTrend] = []
+
     for item_name, points in data_by_item.items():
-        trends.append(ItemTrend(item=item_name, points=points))
+        # 只保留“至少跨 MIN_YEARS_FOR_TREND 年”的 item
+        if len(points) >= MIN_YEARS_FOR_TREND:
+            trends.append(ItemTrend(item=item_name, points=points))
 
     return trends
+

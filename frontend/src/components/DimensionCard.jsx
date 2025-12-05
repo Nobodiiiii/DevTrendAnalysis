@@ -1,4 +1,3 @@
-// src/components/DimensionCard.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchTrends } from '../api/trends';
 import { TrendChart } from './TrendChart';
@@ -24,6 +23,7 @@ export function DimensionCard({ dimension, title, subtitle }) {
     (async () => {
       setLoading(true);
       setError('');
+      setSelectedItems([]);
       try {
         const data = await fetchTrends(dimension, [], 24);
         if (cancelled) return;
@@ -52,6 +52,7 @@ export function DimensionCard({ dimension, title, subtitle }) {
 
   // 切换 have / want
   const handleModeToggle = (nextMode) => {
+    if (nextMode === mode) return;
     setMode(nextMode);
   };
 
@@ -60,6 +61,14 @@ export function DimensionCard({ dimension, title, subtitle }) {
     setSelectedItems((prev) =>
       prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item],
     );
+  };
+
+  const handleClear = () => {
+    setSelectedItems([]);
+  };
+
+  const handleSelectTop3 = () => {
+    setSelectedItems(allItems.slice(0, 3));
   };
 
   const prettyModeLabel = useMemo(
@@ -72,92 +81,125 @@ export function DimensionCard({ dimension, title, subtitle }) {
 
   return (
     <section className="dimension-card">
-      <div className="dimension-card-header">
-        <div>
-          <h2 className="dimension-title">{title}</h2>
-          <p className="dimension-subtitle">{subtitle}</p>
-        </div>
+      <div className="dimension-card-inner">
+        <header className="dimension-card-header">
+          <div className="dimension-card-title-block">
+            <span className="dimension-badge">
+              {dimension.toUpperCase()}
+            </span>
+            <h2 className="dimension-title">{title}</h2>
+            <p className="dimension-subtitle">{subtitle}</p>
+          </div>
 
-        {/* 模式切换：类似 iOS 的 segmented control */}
-        <div className="mode-toggle" aria-label="趋势类型切换">
-          <button
-            type="button"
-            className={`mode-toggle-btn ${
-              mode === 'have' ? 'mode-toggle-btn-active' : ''
-            }`}
-            onClick={() => handleModeToggle('have')}
-          >
-            在职使用
-          </button>
-          <button
-            type="button"
-            className={`mode-toggle-btn ${
-              mode === 'want' ? 'mode-toggle-btn-active' : ''
-            }`}
-            onClick={() => handleModeToggle('want')}
-          >
-            未来想用
-          </button>
-        </div>
-      </div>
-
-      <p className="dimension-mode-label">{prettyModeLabel}</p>
-
-      <div className="dimension-body">
-        {/* 左侧：图表 */}
-        <div className="dimension-chart-wrapper">
-          {loading && <div className="pill pill-soft">加载中…</div>}
-          {error && !loading && (
-            <div className="pill pill-error">加载失败：{error}</div>
-          )}
-          {!loading && !error && (
-            <TrendChart
-              trend={trend}
-              mode={mode}
-              selectedItems={selectedItems}
-            />
-          )}
-        </div>
-
-        {/* 右侧：item 选择 */}
-        <aside className="dimension-sidebar">
-          <div className="sidebar-header">
-            <span className="sidebar-title">技术项筛选</span>
+          {/* 模式切换：类似 iOS segmented control */}
+          <div className="mode-toggle" aria-label="趋势类型切换">
             <button
               type="button"
-              className="sidebar-clear-btn"
-              onClick={() => setSelectedItems([])}
+              className={`mode-toggle-btn ${
+                mode === 'have' ? 'mode-toggle-btn-active' : ''
+              }`}
+              onClick={() => handleModeToggle('have')}
             >
-              清空
+              在职使用
+            </button>
+            <button
+              type="button"
+              className={`mode-toggle-btn ${
+                mode === 'want' ? 'mode-toggle-btn-active' : ''
+              }`}
+              onClick={() => handleModeToggle('want')}
+            >
+              未来想用
             </button>
           </div>
-          <div className="sidebar-subtitle">
-            勾选后在图中叠加该技术的趋势曲线。
+        </header>
+
+        <div className="dimension-meta-row">
+          <span className="dimension-mode-label">{prettyModeLabel}</span>
+          <span className="dimension-meta-hint">
+            基于最近 24 期样本 · 每条线对应一个技术项
+          </span>
+        </div>
+
+        <div className="dimension-body">
+          {/* 左侧：图表 */}
+          <div className="dimension-chart-wrapper">
+            {loading && (
+              <div className="pill pill-soft">
+                <span className="pill-dot" />
+                正在拉取趋势数据…
+              </div>
+            )}
+            {error && !loading && (
+              <div className="pill pill-error">
+                <span className="pill-dot pill-dot-error" />
+                加载失败：{error}
+              </div>
+            )}
+            {!loading && !error && (
+              <TrendChart
+                trend={trend}
+                mode={mode}
+                selectedItems={selectedItems}
+              />
+            )}
           </div>
 
-          <div className="sidebar-items">
-            {allItems.length === 0 && (
-              <div className="sidebar-empty">无可用技术项</div>
-            )}
-            {allItems.map((item) => (
-              <label
-                key={item}
-                className={`sidebar-item ${
-                  selectedItems.includes(item)
-                    ? 'sidebar-item-selected'
-                    : ''
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedItems.includes(item)}
-                  onChange={() => handleItemToggle(item)}
-                />
-                <span className="sidebar-item-label">{item}</span>
-              </label>
-            ))}
-          </div>
-        </aside>
+          {/* 右侧：item 选择 */}
+          <aside className="dimension-sidebar">
+            <div className="sidebar-header">
+              <div>
+                <span className="sidebar-title">技术项筛选</span>
+                <div className="sidebar-subtitle">
+                  勾选后在图中叠加该技术的趋势曲线。
+                </div>
+              </div>
+              <div className="sidebar-actions">
+                <button
+                  type="button"
+                  className="sidebar-chip"
+                  onClick={handleSelectTop3}
+                >
+                  前三
+                </button>
+                <button
+                  type="button"
+                  className="sidebar-chip sidebar-chip-ghost"
+                  onClick={handleClear}
+                >
+                  清空
+                </button>
+              </div>
+            </div>
+
+            <div className="sidebar-items">
+              {allItems.length === 0 && (
+                <div className="sidebar-empty">无可用技术项</div>
+              )}
+              {allItems.map((item) => {
+                const checked = selectedItems.includes(item);
+                return (
+                  <label
+                    key={item}
+                    className={`sidebar-item ${
+                      checked ? 'sidebar-item-selected' : ''
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => handleItemToggle(item)}
+                    />
+                    <span className="sidebar-item-swatch" />
+                    <span className="sidebar-item-label" title={item}>
+                      {item}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </aside>
+        </div>
       </div>
     </section>
   );
