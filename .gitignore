@@ -20,5 +20,6 @@ dist/
 logs/
 *.log
 
-# ==== database ====
+# ==== data ====
+data/raw
 *.db
