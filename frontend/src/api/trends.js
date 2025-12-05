@@ -39,7 +39,72 @@ async function safeFetchJson(url, options = {}, retry = 1) {
 }
 
 /**
- * 获取某个维度的趋势。
+ * 找到“最近的一年”：
+ * 先从当前年份（如 2025）往前找，直到有数据的那一年；
+ * 如果都找不到（极端情况），就使用数据中最大的年份。
+ *
+ * @param {Array<{item: string, points: {year: number}[]}>} items
+ * @returns {number | null}
+ */
+function findLatestYearWithData(items = []) {
+  const yearSet = new Set();
+
+  items.forEach(({ points = [] }) => {
+    points.forEach((p) => {
+      if (typeof p.year === 'number') {
+        yearSet.add(p.year);
+      }
+    });
+  });
+
+  if (yearSet.size === 0) return null;
+
+  const currentYear = new Date().getFullYear();
+
+  // 从当前年往前找最近有数据的年份
+  for (let y = currentYear; y >= 1970; y--) {
+    if (yearSet.has(y)) {
+      return y;
+    }
+  }
+
+  // 兜底：如果上面的循环里没找到，就直接拿已有年份里的最大值
+  return Math.max(...yearSet);
+}
+
+/**
+ * 按“最近的一年”的 have_ratio（使用率）从高到低排序 items。
+ *
+ * @param {{ dimension: string, items: Array<{ item: string, points: Array<{year:number, have_ratio:number}> }> }} data
+ * @returns 同结构的已排序数据
+ */
+function sortItemsByLatestYearUsage(data) {
+  if (!data || !Array.isArray(data.items) || data.items.length === 0) {
+    return data;
+  }
+
+  const targetYear = findLatestYearWithData(data.items);
+  if (targetYear == null) return data;
+
+  const sortedItems = [...data.items].sort((a, b) => {
+    const aPoint = (a.points || []).find((p) => p.year === targetYear);
+    const bPoint = (b.points || []).find((p) => p.year === targetYear);
+
+    const aRatio = aPoint?.have_ratio ?? 0;
+    const bRatio = bPoint?.have_ratio ?? 0;
+
+    // 按使用率从高到低
+    return bRatio - aRatio;
+  });
+
+  return {
+    ...data,
+    items: sortedItems,
+  };
+}
+
+/**
+ * 获取某个维度的趋势，并按“最近一年最高使用率”对 items 排序。
  *
  * @param {string} dimension - 'language' | 'database' | ...
  * @param {string[]} items   - 技术项名称列表；为空则由后端返回最近一年 Top N
@@ -57,5 +122,11 @@ export async function fetchTrends(dimension, items = [], limit = 24) {
   const url = `${BASE_URL}/api/trends/${dimension}?${params.toString()}`;
   console.debug('[fetchTrends] →', url);
 
-  return safeFetchJson(url);
+  const rawData = await safeFetchJson(url);
+
+  // 在这里对获取到的数据进行排序后再返回
+  const sorted = sortItemsByLatestYearUsage(rawData);
+  console.debug('[fetchTrends] 排序后的数据最近年份为:', findLatestYearWithData(sorted.items));
+
+  return sorted;
 }

@@ -306,6 +306,23 @@
   min-height: 220px;
 }
 
+/* sidebar */
+
+.dimension-sidebar {
+  border-radius: 18px;
+  padding: 10px 10px 8px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* ✅ 缩短高度，避免超过图表；图表是 260px 高 */
+  max-height: 260px;
+}
+
+
+
 /* pill 状态 */
 
 .pill {
@@ -351,6 +368,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* 2. 高度与图表区域一致，填满整行 */
+  height: 100%;
 }
 
 .sidebar-header {
@@ -374,14 +393,18 @@
 
 .sidebar-actions {
   display: inline-flex;
-  gap: 4px;
+  gap: 6px;
 }
+
+/* 列表上方两个按钮加宽一点 */
 
 .sidebar-chip {
   border-radius: 999px;
   border: 1px solid rgba(0, 0, 0, 0.12);
-  padding: 2px 8px;
-  font-size: 0.76rem;
+  padding: 4px 12px;
+  min-width: 60px;
+  text-align: center;
+  font-size: 0.78rem;
   cursor: pointer;
   background: #111111;
   color: #ffffff;
@@ -438,12 +461,11 @@
   margin: 0;
 }
 
+/* 4. 小圆点颜色由 inline style 控制，这里只保持形状 */
 .sidebar-item-swatch {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #007aff, #34c759);
-  opacity: 0.7;
 }
 
 .sidebar-item-label {
@@ -469,7 +491,7 @@
   height: 260px;
 }
 
-/* 玻璃感容器：干净一点 */
+/* 4. 玻璃感容器：更有高级感，但色调保持中性而不是偏蓝 */
 
 .chart-inner-glass {
   height: 100%;
@@ -563,6 +585,10 @@
 
   .dimension-body {
     grid-template-columns: 1fr;
+  }
+
+  .dimension-sidebar {
+    height: auto;
   }
 }
 

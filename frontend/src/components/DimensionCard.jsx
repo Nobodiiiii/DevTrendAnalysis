@@ -1,6 +1,7 @@
+// src/components/DimensionCard.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchTrends } from '../api/trends';
-import { TrendChart } from './TrendChart';
+import { TrendChart, TREND_COLORS } from './TrendChart';
 
 /**
  * props:
@@ -13,6 +14,7 @@ export function DimensionCard({ dimension, title, subtitle }) {
   const [mode, setMode] = useState('have'); // 'have' | 'want'
   const [selectedItems, setSelectedItems] = useState([]);
   const [allItems, setAllItems] = useState([]);
+  const [colorMap, setColorMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -33,7 +35,14 @@ export function DimensionCard({ dimension, title, subtitle }) {
         const itemNames = (data.items || []).map((it) => it.item);
         setAllItems(itemNames);
 
-        // 初始默认选择前 3 个
+        // 1）一开始就按顺序分配颜色
+        const nextColorMap = {};
+        itemNames.forEach((name, idx) => {
+          nextColorMap[name] = TREND_COLORS[idx % TREND_COLORS.length];
+        });
+        setColorMap(nextColorMap);
+
+        // 2）初始默认选择前 3 个
         setSelectedItems(itemNames.slice(0, 3));
       } catch (e) {
         console.error('[DimensionCard] fetch error', e);
@@ -141,6 +150,7 @@ export function DimensionCard({ dimension, title, subtitle }) {
                 trend={trend}
                 mode={mode}
                 selectedItems={selectedItems}
+                colorMap={colorMap}
               />
             )}
           </div>
@@ -178,6 +188,8 @@ export function DimensionCard({ dimension, title, subtitle }) {
               )}
               {allItems.map((item) => {
                 const checked = selectedItems.includes(item);
+                const color = colorMap[item] || TREND_COLORS[0];
+
                 return (
                   <label
                     key={item}
@@ -190,7 +202,11 @@ export function DimensionCard({ dimension, title, subtitle }) {
                       checked={checked}
                       onChange={() => handleItemToggle(item)}
                     />
-                    <span className="sidebar-item-swatch" />
+                    {/* 每个 item 一开始就有自己的颜色，和线条一致 */}
+                    <span
+                      className="sidebar-item-swatch"
+                      style={{ background: color }}
+                    />
                     <span className="sidebar-item-label" title={item}>
                       {item}
                     </span>
