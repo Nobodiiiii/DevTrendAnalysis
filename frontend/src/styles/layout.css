@@ -4,19 +4,23 @@
   flex-direction: column;
 }
 
-/* 顶部导航，浅色毛玻璃 */
+/* 顶部导航，深色渐变毛玻璃（修改为渐变黑）*/
 .app-header {
   position: sticky;
   top: 0;
   z-index: 20;
   backdrop-filter: blur(var(--blur-heavy));
+  /* 渐变黑：从深黑到更透明的暗色 */
   background: linear-gradient(
     to bottom,
-    rgba(245, 245, 247, 0.96),
-    rgba(245, 245, 247, 0.8),
-    transparent
+    rgba(10, 10, 10, 1),
+    rgba(17, 17, 17, 0.95),
+    rgba(20, 20, 20, 0.9),
+    rgba(25, 30, 30, 0.8)
   );
-  border-bottom: 1px solid var(--border-subtle);
+  /* 底部边线用较浅的白色半透明以在暗背景中可见 */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: #ffffff; /* 默认文本白色系 */
 }
 
 .app-header-inner {
@@ -40,18 +44,23 @@
   padding: 6px 10px;
   border-radius: var(--radius-pill);
   transition: background var(--transition-fast), transform var(--transition-fast),
-    box-shadow var(--transition-fast);
+    box-shadow var(--transition-fast), color var(--transition-fast);
+  /* 给暗背景上的轻微边界，保持按钮可点感 */
+  border: 1px solid rgba(255, 255, 255, 0.03);
 }
 
+/* hover: 反色 -> 变成亮背景、深色文字（invert） */
 .brand-block:hover {
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.95);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
   transform: translateY(-1px);
+  border-color: rgba(0, 0, 0, 0.06);
 }
-
 .brand-logo {
   width: 28px;
   height: 28px;
+  /* 如果 logo 是深色 svg，下面的 filter 可去掉；若 logo 本身为深色且在暗背景看不清，可考虑使用 invert */
+  /* filter: invert(1) contrast(1.05); */
 }
 
 .brand-text {
@@ -60,17 +69,24 @@
   align-items: flex-start;
 }
 
+/* 品牌文字在暗背景下默认是亮色 */
 .brand-title {
   font-size: 0.88rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: #ffffff; /* 由原先的 var(--accent) 改为白色系，在暗背景上更稳定 */
 }
 
 .brand-subtitle {
   font-size: 0.72rem;
-  color: var(--text-soft);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+/* 当 brand-block hover（亮背景）时文字反色为暗色 */
+.brand-block:hover .brand-title,
+.brand-block:hover .brand-subtitle {
+  color: #111111;
 }
 
 /* 顶部“侧边栏”导航 */
@@ -80,11 +96,12 @@
   gap: 8px;
 }
 
+/* 导航按钮：在暗背景上默认为浅色文字，hover/active 时反色（变为白底深字）*/
 .nav-link {
   position: relative;
   border-radius: var(--radius-pill);
   padding: 6px 14px;
-  border: 1px solid transparent;
+  border: 1px solid rgba(255, 255, 255, 0.03); /* 在暗背景上的微边框 */
   background: transparent;
   cursor: pointer;
   display: inline-flex;
@@ -95,38 +112,45 @@
     background var(--transition-fast),
     border-color var(--transition-fast),
     transform var(--transition-fast),
-    box-shadow var(--transition-fast);
+    box-shadow var(--transition-fast),
+    color var(--transition-fast);
 }
 
+/* 英文小字与中文主字默认为浅色（适配暗背景） */
 .nav-link-en {
   font-size: 0.72rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-soft);
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .nav-link-zh {
   font-size: 0.86rem;
   margin-top: 1px;
-  color: var(--text-main);
+  color: #ffffff;
 }
 
+/* hover: 反色 -> 白色背景，深色文字 */
 .nav-link:hover {
   background: rgba(255, 255, 255, 0.95);
   border-color: rgba(0, 0, 0, 0.08);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.06);
   transform: translateY(-1px);
 }
-
-.nav-link-active {
-  background: #111111;
-  border-color: #111111;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+.nav-link:hover .nav-link-en,
+.nav-link:hover .nav-link-zh {
+  color: #111111;
 }
 
+/* active 状态也采用反色（白底深字）——与 hover 一致但可加更强阴影 */
+.nav-link-active {
+  background: #ffffff;
+  border-color: #ffffff;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+}
 .nav-link-active .nav-link-en,
 .nav-link-active .nav-link-zh {
-  color: #ffffff;
+  color: #111111;
 }
 
 /* 主内容与底部 */

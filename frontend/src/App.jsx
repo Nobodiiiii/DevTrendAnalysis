@@ -4,7 +4,7 @@ import AppLayout from './components/layout/AppLayout';
 import Home from './pages/Home';
 import TechTrends from './pages/TechTrends';
 import SalaryAnalysis from './pages/SalaryAnalysis';
-import PersonalAdvisory from './pages/PersonalAdvisory';
+import PersonalAdvice from './pages/PersonalAdvice';
 
 function App() {
   return (
@@ -13,7 +13,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/future-landscape" element={<TechTrends />} />
         <Route path="/value-spectrum" element={<SalaryAnalysis />} />
-        <Route path="/career-compass" element={<PersonalAdvisory />} />
+        <Route path="/career-compass" element={<PersonalAdvice />} />
       </Routes>
     </AppLayout>
   );

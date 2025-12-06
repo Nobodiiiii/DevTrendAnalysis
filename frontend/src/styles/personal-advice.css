@@ -1,0 +1,410 @@
+.advice-page {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* 1. 介绍区域 */
+
+.advice-hero {
+  padding-top: 12px;
+}
+
+.advice-hero-card {
+  padding: 26px 24px 24px;
+  border-radius: 34px;
+  border: 1px solid rgba(255, 255, 255, 1);
+  background:
+    radial-gradient(circle at top right, #ffffff 0%, #f5f5f7 50%, #e5e5ea 100%),
+    linear-gradient(145deg, #ffffff 0%, #f5f5f7 55%, #e5e5ea 100%);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+}
+
+.advice-hero-kicker {
+  font-size: 0.8rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+  margin-bottom: 10px;
+}
+
+.advice-hero-title {
+  margin: 0 0 10px;
+  font-size: 2.1rem;
+  color: var(--accent);
+}
+
+.advice-hero-highlight {
+  color: var(--text-muted);
+  font-size: 1.4rem;
+  margin-left: 4px;
+}
+
+.advice-hero-subtitle {
+  margin: 0 0 16px;
+  color: var(--text-muted);
+  line-height: 1.7;
+  max-width: 640px;
+}
+
+.advice-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 0.8rem;
+  color: var(--text-soft);
+}
+
+.advice-hero-meta span {
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+/* 通用 Section */
+
+.advice-section {
+  margin-top: 6px;
+}
+
+.advice-section-header h2 {
+  margin: 0 0 4px;
+  font-size: 1.25rem;
+  color: var(--accent);
+}
+
+.advice-section-header p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* 通用卡片 */
+
+.advice-card {
+  border-radius: 24px;
+  padding: 16px 18px 16px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background:
+    radial-gradient(circle at top left, #ffffff 0%, #f7f7fb 55%, #f0f0f5 100%);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.1);
+}
+
+.advice-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.advice-card-title {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--accent);
+}
+
+.advice-card-subtitle {
+  margin: 4px 0 10px;
+  font-size: 0.86rem;
+  color: var(--text-muted);
+}
+
+.advice-eyebrow {
+  font-size: 0.74rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.advice-chip {
+  border-radius: var(--radius-pill);
+  padding: 2px 10px;
+  font-size: 0.78rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  color: var(--accent);
+}
+
+/* 2. 技术问卷区 */
+
+.advice-tech-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+.advice-options-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.advice-option-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.96);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.advice-option-pill input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.advice-option-pill span {
+  pointer-events: none;
+}
+
+.advice-option-pill:hover {
+  transform: translateY(-0.5px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+.advice-option-pill-active {
+  background: #111111;
+  color: #ffffff;
+  border-color: #111111;
+}
+
+/* 3. 身份与预期（学生 / 从业者） */
+
+.advice-role-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.advice-role-card {
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    border-width var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast),
+    background var(--transition-fast),
+    opacity var(--transition-fast),
+    filter var(--transition-fast);
+  position: relative;
+}
+
+/* 选中：黑框加粗 + 阴影 + 轻微浮起（保留渐变底色） */
+.advice-role-card-selected {
+  border-color: #111111;
+  border-width: 2px;
+  box-shadow: 0 20px 52px rgba(0, 0, 0, 0.2);
+  transform: translateY(-1px);
+}
+
+/* 未选中：轻微暗化 */
+.advice-role-card-dimmed {
+  opacity: 0.6;
+  filter: grayscale(0.15);
+}
+
+.advice-role-pill {
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.78rem;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  color: var(--accent);
+}
+
+/* 选中卡片里的小按钮：黑底白字 */
+.advice-role-card-selected .advice-role-pill {
+  background: #111111;
+  color: #ffffff;
+  border-color: #111111;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+
+.advice-role-fields {
+  margin-top: 8px;
+}
+
+.advice-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 0.84rem;
+}
+
+.advice-field label {
+  color: var(--text-soft);
+}
+
+.advice-field select,
+.advice-field textarea,
+.advice-field input {
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 7px 10px;
+  font-size: 0.86rem;
+  outline: none;
+  background: rgba(255, 255, 255, 0.98);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.advice-field select:focus,
+.advice-field textarea:focus,
+.advice-field input:focus {
+  border-color: #111111;
+  box-shadow: 0 0 0 1px rgba(17, 17, 17, 0.1);
+  background: #ffffff;
+}
+
+/* 禁用态输入，与暗化卡片相配合 */
+.advice-field select:disabled,
+.advice-field textarea:disabled,
+.advice-field input:disabled {
+  cursor: not-allowed;
+  background: rgba(248, 248, 248, 0.9);
+}
+
+/* 4. 其他补充 */
+
+.advice-other-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 14px;
+}
+
+/* 底部生成建议按钮 */
+
+.advice-generate-section {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.advice-generate-button {
+  border-radius: 999px;
+  border: none;
+  padding: 10px 22px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: #111111;
+  color: #ffffff;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.advice-generate-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 52px rgba(0, 0, 0, 0.32);
+}
+
+.advice-generate-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-soft);
+}
+
+/* 5. 建议区 */
+
+.advice-section-bottom {
+  margin-bottom: 16px;
+}
+
+.advice-suggestions-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.1fr);
+  gap: 14px;
+}
+
+.advice-suggestion-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.advice-suggestion-textarea {
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  font-size: 0.86rem;
+}
+
+/* AI 按钮 */
+
+.advice-ai-button {
+  border-radius: 999px;
+  border: none;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  background: #111111;
+  color: #ffffff;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.advice-ai-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
+}
+
+/* 通用：textarea 更贴合卡片风格 */
+
+.advice-suggestion-textarea,
+.advice-field textarea {
+  font-family: inherit;
+  line-height: 1.6;
+}
+
+/* 响应式 */
+
+@media (max-width: 960px) {
+  .advice-role-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .advice-other-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .advice-suggestions-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .advice-hero-card {
+    padding-inline: 18px;
+  }
+
+  .advice-hero-title {
+    font-size: 1.9rem;
+  }
+}
