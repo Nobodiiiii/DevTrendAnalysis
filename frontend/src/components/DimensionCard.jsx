@@ -93,11 +93,7 @@ export function DimensionCard({ dimension, title, subtitle }) {
       <div className="dimension-card-inner">
         <header className="dimension-card-header">
           <div className="dimension-card-title-block">
-            <span className="dimension-badge">
-              {dimension.toUpperCase()}
-            </span>
             <h2 className="dimension-title">{title}</h2>
-            <p className="dimension-subtitle">{subtitle}</p>
           </div>
 
           {/* 模式切换：类似 iOS segmented control */}
@@ -126,7 +122,7 @@ export function DimensionCard({ dimension, title, subtitle }) {
         <div className="dimension-meta-row">
           <span className="dimension-mode-label">{prettyModeLabel}</span>
           <span className="dimension-meta-hint">
-            基于最近 24 期样本 · 每条线对应一个技术项
+            每条线对应一个技术项
           </span>
         </div>
 
