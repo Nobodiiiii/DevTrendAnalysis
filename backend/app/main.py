@@ -1,58 +1,32 @@
-# backend/app/main.py
+﻿# backend/app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# 创建 FastAPI 实例
+from .api.routes import api_router
+
 app = FastAPI(
-    title="DevTrendAnalysis API",
-    description="后端提供给前端的数据接口",
-    version="0.1.0",
+    title="DevTrend API",
+    version="1.0.0",
 )
 
-# 允许哪些前端域名来访问（开发环境下）
+# 根据你实际前端端口来，下面这几个都列上就很保险
 origins = [
-    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
     "http://localhost:5173",
+    "http://127.0.0.1:5173",
 ]
 
-# 配置 CORS 中间件，允许前端跨域访问
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,        # 允许的前端地址
-    allow_credentials=True,
-    allow_methods=["*"],          # 允许所有 HTTP 方法（GET/POST 等）
-    allow_headers=["*"],          # 允许所有请求头
+    allow_origins=origins,
+    allow_credentials=True,   # 如果不需要携带 cookie，可以设为 False
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
+app.include_router(api_router)
 
-# 一个简单的健康检查接口，可选
-@app.get("/health")
-async def health_check():
-    return {"status": "ok"}
-
-
-# 前端刚才在 App.jsx 里请求的接口：
-#    fetch("http://127.0.0.1:8000/api/hello")
-@app.get("/api/hello")
-async def hello():
-    return {"message": "Hello from FastAPI"}
-
-
-# 额外送一个“返回列表数据”的接口，方便你以后做表格/图表
-@app.get("/api/sample-data")
-async def sample_data():
-    """
-    返回一些假数据，前端可以拿去画图或做表格：
-    [
-      {"label": "Jan", "value": 10},
-      {"label": "Feb", "value": 20},
-      ...
-    ]
-    """
-    data = [
-        {"label": "Jan", "value": 10},
-        {"label": "Feb", "value": 25},
-        {"label": "Mar", "value": 18},
-        {"label": "Apr", "value": 30},
-    ]
-    return {"items": data}
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("backend.app.main:app", host="0.0.0.0", port=8000, reload=True)

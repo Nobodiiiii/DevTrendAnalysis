@@ -1,0 +1,229 @@
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 顶部导航，深色渐变毛玻璃（修改为渐变黑）*/
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(var(--blur-heavy));
+  /* 渐变黑：从深黑到更透明的暗色 */
+  background: linear-gradient(
+    to bottom,
+    rgba(10, 10, 10, 1),
+    rgba(17, 17, 17, 0.95),
+    rgba(20, 20, 20, 0.9),
+    rgba(25, 30, 30, 0.8)
+  );
+  /* 底部边线用较浅的白色半透明以在暗背景中可见 */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: #ffffff; /* 默认文本白色系 */
+}
+
+.app-header-inner {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 12px 24px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+/* 左侧品牌区域 */
+.brand-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: var(--radius-pill);
+  transition: background var(--transition-fast), transform var(--transition-fast),
+    box-shadow var(--transition-fast), color var(--transition-fast);
+  /* 给暗背景上的轻微边界，保持按钮可点感 */
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+/* hover: 反色 -> 变成亮背景、深色文字（invert） */
+.brand-block:hover {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+.brand-logo {
+  width: 28px;
+  height: 28px;
+  /* 如果 logo 是深色 svg，下面的 filter 可去掉；若 logo 本身为深色且在暗背景看不清，可考虑使用 invert */
+  /* filter: invert(1) contrast(1.05); */
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* 品牌文字在暗背景下默认是亮色 */
+.brand-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ffffff; /* 由原先的 var(--accent) 改为白色系，在暗背景上更稳定 */
+}
+
+.brand-subtitle {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+/* 当 brand-block hover（亮背景）时文字反色为暗色 */
+.brand-block:hover .brand-title,
+.brand-block:hover .brand-subtitle {
+  color: #111111;
+}
+
+/* 顶部“侧边栏”导航 */
+.app-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 导航按钮：在暗背景上默认为浅色文字，hover/active 时反色（变为白底深字）*/
+.nav-link {
+  position: relative;
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.03); /* 在暗背景上的微边框 */
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 160px;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    color var(--transition-fast);
+}
+
+/* 英文小字与中文主字默认为浅色（适配暗背景） */
+.nav-link-en {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.nav-link-zh {
+  font-size: 0.86rem;
+  margin-top: 1px;
+  color: #ffffff;
+}
+
+/* hover: 反色 -> 白色背景，深色文字 */
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+.nav-link:hover .nav-link-en,
+.nav-link:hover .nav-link-zh {
+  color: #111111;
+}
+
+/* active 状态也采用反色（白底深字）——与 hover 一致但可加更强阴影 */
+.nav-link-active {
+  background: #ffffff;
+  border-color: #ffffff;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+}
+.nav-link-active .nav-link-en,
+.nav-link-active .nav-link-zh {
+  color: #111111;
+}
+
+/* 主内容与底部 */
+
+.app-main {
+  flex: 1;
+}
+
+.app-main-inner {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 32px 24px 40px;
+}
+
+.app-footer {
+  border-top: 1px solid var(--border-subtle);
+  background: rgba(249, 249, 251, 0.94);
+}
+
+.app-footer-inner {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 16px 24px 20px;
+  font-size: 0.78rem;
+  color: var(--text-soft);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app-footer-sub {
+  opacity: 0.9;
+}
+
+/* 占位页基础样式 */
+
+.placeholder-page {
+  padding: 40px 0;
+}
+
+.placeholder-hero h1 {
+  font-size: 2rem;
+  margin-bottom: 8px;
+  color: var(--accent);
+}
+
+.placeholder-hero p {
+  color: var(--text-muted);
+  max-width: 540px;
+  line-height: 1.6;
+}
+
+/* 响应式 */
+
+@media (max-width: 768px) {
+  .app-header-inner {
+    padding-inline: 16px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .app-nav {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .nav-link {
+    min-width: 180px;
+  }
+
+  .app-main-inner {
+    padding-inline: 16px;
+  }
+}
