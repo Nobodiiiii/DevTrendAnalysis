@@ -3,9 +3,13 @@ from pyspark.sql import SparkSession, functions as F
 SILVER_RAW = "hdfs:///advice/silver/survey_results_2025_raw"
 SILVER_CLEAN = "hdfs:///advice/silver/survey_results_2025_clean"
 
-GOLD_BENCH_BASE = "hdfs:///advice/gold/2025/salary_benchmark_base"
-GOLD_UPLIFT_BASE = "hdfs:///advice/gold/2025/uplift_to_p75_base"
+# ✅ salary benchmark rollups (fallback levels)
+GOLD_BENCH_L1 = "hdfs:///advice/gold/2025/salary_benchmark_lvl1_emp_wb_dt"
+GOLD_BENCH_L2 = "hdfs:///advice/gold/2025/salary_benchmark_lvl2_emp_wb"
+GOLD_BENCH_L3 = "hdfs:///advice/gold/2025/salary_benchmark_lvl3_emp_dt"
+GOLD_BENCH_L4 = "hdfs:///advice/gold/2025/salary_benchmark_lvl4_emp_all"
 
+# ✅ tech trends
 GOLD_TREND_LANG = "hdfs:///advice/gold/2025/tech_trends_language"
 GOLD_TREND_DB = "hdfs:///advice/gold/2025/tech_trends_database"
 GOLD_TREND_WEB = "hdfs:///advice/gold/2025/tech_trends_webframe"
@@ -14,16 +18,13 @@ spark = SparkSession.builder.appName("advice-build-gold-2025").getOrCreate()
 
 raw = spark.read.parquet(SILVER_RAW)
 
-# 只保留建议系统必需字段（不用 Country/OrgSize；ICorPM 备选）
 df = raw.select(
     F.col("ResponseId").alias("response_id"),
     F.col("ConvertedCompYearly").alias("salary_yearly"),
     F.col("Employment").alias("employment"),
     F.col("WorkExp").alias("workexp"),
     F.col("DevType").alias("devtype"),
-    F.col("RemoteWork").alias("remote_work"),
-    F.col("ICorPM").alias("icorpm"),
-    # tech have/want（用于“开发栈建议”）
+    # tech have/want
     F.col("LanguageHaveWorkedWith").alias("lang_have"),
     F.col("LanguageWantToWorkWith").alias("lang_want"),
     F.col("DatabaseHaveWorkedWith").alias("db_have"),
@@ -37,8 +38,6 @@ def norm(c):
 
 df = (
     df.withColumn("employment", norm("employment"))
-      .withColumn("remote_work", norm("remote_work"))
-      .withColumn("icorpm", norm("icorpm"))
       .withColumn("devtype", norm("devtype"))
 )
 
@@ -55,7 +54,6 @@ df = df.withColumn(
 
 # WorkExpYears + Bin
 df = df.withColumn("workexp_years", F.regexp_extract(F.col("workexp").cast("string"), r"(\d+)", 1).cast("int"))
-
 df = df.withColumn(
     "workexp_bin",
     F.when(F.col("workexp_years").isNull(), F.lit("unknown"))
@@ -67,25 +65,6 @@ df = df.withColumn(
      .otherwise(F.lit("16+"))
 )
 
-# RemoteWork_std
-df = df.withColumn(
-    "remote_work_std",
-    F.when(F.col("remote_work").isNull(), F.lit("unknown"))
-     .when(F.lower(F.col("remote_work")).startswith("remote"), F.lit("remote"))
-     .when(F.lower(F.col("remote_work")).startswith("hybrid"), F.lit("hybrid"))
-     .when(F.lower(F.col("remote_work")).startswith("in-person"), F.lit("in_person"))
-     .otherwise(F.lit("unknown"))
-)
-
-# ICorPM_std（备选特征）
-df = df.withColumn(
-    "icorpm_std",
-    F.when(F.col("icorpm").isNull(), F.lit("unknown"))
-     .when(F.lower(F.col("icorpm")).contains("individual contributor"), F.lit("ic"))
-     .when(F.lower(F.col("icorpm")).contains("people manager"), F.lit("people_manager"))
-     .otherwise(F.lit("unknown"))
-)
-
 # DevType_primary（若多选用第一个 token）
 df = df.withColumn(
     "devtype_primary",
@@ -93,7 +72,7 @@ df = df.withColumn(
      .otherwise(F.trim(F.split(F.col("devtype"), ";").getItem(0)))
 )
 
-# DevType_family 映射（按你提供的全量值 + 兜底）
+# DevType_family 映射（你给的全量 + 兜底）
 dt = F.col("devtype_primary")
 df = df.withColumn(
     "devtype_family",
@@ -124,66 +103,46 @@ df = (
       .withColumn("salary_yearly", F.when(F.col("salary_yearly") <= 0, F.lit(None)).otherwise(F.col("salary_yearly")))
 )
 
-# 写 Silver clean（便于审计、复用）
+# 写 Silver clean
 df.write.mode("overwrite").parquet(SILVER_CLEAN)
 
-# ===== Gold: Base 薪资基准（cohort：Employment_std + WorkExpBin + DevType_family）
+# ===== 用于 benchmark 的有效样本
 salary_df = (
     df.where(F.col("salary_yearly").isNotNull())
       .where(F.col("employment_std").isin("employed", "self_employed"))
       .where(F.col("workexp_bin") != "unknown")
 )
 
-bench_base = (
-    salary_df.groupBy("employment_std", "workexp_bin", "devtype_family")
-    .agg(
+def agg_quantiles(gdf):
+    return gdf.agg(
         F.count("*").alias("n"),
         F.expr("percentile_approx(salary_yearly, 0.25)").alias("p25"),
         F.expr("percentile_approx(salary_yearly, 0.50)").alias("p50"),
         F.expr("percentile_approx(salary_yearly, 0.75)").alias("p75"),
         F.expr("percentile_approx(salary_yearly, 0.90)").alias("p90"),
     )
-)
-bench_base.write.mode("overwrite").parquet(GOLD_BENCH_BASE)
 
-# ===== Gold: uplift（RemoteWork / ICorPM 作为备选特征对比到 P75）
-p75_base = bench_base.select("employment_std", "workexp_bin", "devtype_family", "p75")
-joined = (
-    salary_df.join(p75_base, ["employment_std", "workexp_bin", "devtype_family"], "inner")
-    .withColumn("is_high", F.col("salary_yearly") >= F.col("p75"))
-)
+# L1: emp + workexp_bin + devtype_family
+bench_l1 = agg_quantiles(salary_df.groupBy("employment_std", "workexp_bin", "devtype_family"))
+bench_l1.write.mode("overwrite").parquet(GOLD_BENCH_L1)
 
-def uplift_for(feature_col: str, feature_name: str):
-    all_counts = (
-        joined.groupBy("employment_std", "workexp_bin", "devtype_family", F.col(feature_col).alias("feature_value"))
-        .agg(F.count("*").alias("cnt_all"))
-    )
-    high_counts = (
-        joined.where(F.col("is_high") == True)
-        .groupBy("employment_std", "workexp_bin", "devtype_family", F.col(feature_col).alias("feature_value"))
-        .agg(F.count("*").alias("cnt_high"))
-    )
-    base_n = joined.groupBy("employment_std", "workexp_bin", "devtype_family").agg(
-        F.count("*").alias("n_all"),
-        F.sum(F.when(F.col("is_high") == True, 1).otherwise(0)).alias("n_high")
-    )
+# L2: emp + workexp_bin
+bench_l2 = agg_quantiles(salary_df.groupBy("employment_std", "workexp_bin")) \
+    .withColumn("devtype_family", F.lit(None).cast("string"))
+bench_l2.write.mode("overwrite").parquet(GOLD_BENCH_L2)
 
-    return (
-        all_counts.join(high_counts, ["employment_std", "workexp_bin", "devtype_family", "feature_value"], "left")
-        .join(base_n, ["employment_std", "workexp_bin", "devtype_family"], "left")
-        .withColumn("cnt_high", F.coalesce(F.col("cnt_high"), F.lit(0)))
-        .withColumn("coverage_all", F.col("cnt_all") / F.col("n_all"))
-        .withColumn("coverage_high", F.when(F.col("n_high") > 0, F.col("cnt_high") / F.col("n_high")).otherwise(F.lit(0.0)))
-        .withColumn("uplift", F.col("coverage_high") - F.col("coverage_all"))
-        .withColumn("feature_name", F.lit(feature_name))
-        .select("employment_std", "workexp_bin", "devtype_family", "feature_name", "feature_value",
-                "coverage_all", "coverage_high", "uplift", "n_all", "n_high")
-    )
+# L3: emp + devtype_family
+bench_l3 = agg_quantiles(salary_df.groupBy("employment_std", "devtype_family")) \
+    .withColumn("workexp_bin", F.lit(None).cast("string"))
+bench_l3.write.mode("overwrite").parquet(GOLD_BENCH_L3)
 
-uplift_base = uplift_for("remote_work_std", "RemoteWork").unionByName(uplift_for("icorpm_std", "ICorPM"))
-uplift_base.write.mode("overwrite").parquet(GOLD_UPLIFT_BASE)
+# L4: emp all
+bench_l4 = agg_quantiles(salary_df.groupBy("employment_std")) \
+    .withColumn("workexp_bin", F.lit(None).cast("string")) \
+    .withColumn("devtype_family", F.lit(None).cast("string"))
+bench_l4.write.mode("overwrite").parquet(GOLD_BENCH_L4)
 
-# ===== Gold: tech trends（have/want 缺口，用于栈建议）
+# ===== Gold: tech trends（have/want 缺口）
 def build_trends(df_in, have_col, want_col, out_path, tech_type):
     base = (
         df_in.where(F.col("employment_std").isin("employed", "self_employed"))
@@ -195,7 +154,6 @@ def build_trends(df_in, have_col, want_col, out_path, tech_type):
             )
     )
 
-    # cohort 样本量（只保留这一份 n，后面只 join 一次）
     cohort_n = base.groupBy("workexp_bin", "devtype_family") \
                    .agg(F.countDistinct("response_id").alias("n"))
 
@@ -218,14 +176,12 @@ def build_trends(df_in, have_col, want_col, out_path, tech_type):
     want_cnt = want.groupBy("workexp_bin", "devtype_family", "tech") \
                    .agg(F.countDistinct("response_id").alias("want_cnt"))
 
-    # 先把 have/want 做 full outer，保留只在 want 或只在 have 的 tech
     hv = (
         have_cnt.join(want_cnt, ["workexp_bin", "devtype_family", "tech"], "full")
                 .withColumn("have_cnt", F.coalesce(F.col("have_cnt"), F.lit(0)))
                 .withColumn("want_cnt", F.coalesce(F.col("want_cnt"), F.lit(0)))
     )
 
-    # 再 join cohort_n（只 join 一次，所以不会出现两个 n）
     trend = (
         hv.join(cohort_n, ["workexp_bin", "devtype_family"], "left")
           .withColumn("have_rate", F.col("have_cnt") / F.col("n"))
@@ -237,15 +193,16 @@ def build_trends(df_in, have_col, want_col, out_path, tech_type):
 
     trend.write.mode("overwrite").parquet(out_path)
 
-
 build_trends(df, "lang_have", "lang_want", GOLD_TREND_LANG, "language")
 build_trends(df, "db_have", "db_want", GOLD_TREND_DB, "database")
 build_trends(df, "web_have", "web_want", GOLD_TREND_WEB, "webframe")
 
 print("DONE:")
 print("  SILVER_CLEAN =", SILVER_CLEAN)
-print("  GOLD_BENCH_BASE =", GOLD_BENCH_BASE)
-print("  GOLD_UPLIFT_BASE =", GOLD_UPLIFT_BASE)
+print("  GOLD_BENCH_L1 =", GOLD_BENCH_L1)
+print("  GOLD_BENCH_L2 =", GOLD_BENCH_L2)
+print("  GOLD_BENCH_L3 =", GOLD_BENCH_L3)
+print("  GOLD_BENCH_L4 =", GOLD_BENCH_L4)
 print("  GOLD_TREND_LANG =", GOLD_TREND_LANG)
 print("  GOLD_TREND_DB   =", GOLD_TREND_DB)
 print("  GOLD_TREND_WEB  =", GOLD_TREND_WEB)
