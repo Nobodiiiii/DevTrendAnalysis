@@ -140,7 +140,7 @@ def quote_ident(name: str) -> str:
 
 def get_connection() -> sqlite3.Connection:
     here = Path(__file__).resolve()
-    project_root = here.parents[3]
+    project_root = here.parents[2]
     db_path = project_root / "data" / "devtrend.db"
     print(f"Using database at {db_path}")
 
