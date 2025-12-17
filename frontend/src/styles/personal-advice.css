@@ -589,6 +589,19 @@
   color: var(--text-soft);
 }
 
+/* 标题下方的说明文字 */
+.advice-viz-subtitle {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-soft);
+  margin-top: 6px;
+}
+
+.advice-viz-subtitle strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* 薪资图表 */
 .advice-salary-chart {
   width: 100%;
@@ -604,6 +617,11 @@
 
 .advice-salary-range {
   fill: rgba(17, 17, 17, 0.18);
+}
+
+/* 用户薪资区间背景高亮 */
+.advice-salary-user-range {
+  fill: rgba(255, 149, 0, 0.15);
 }
 
 .advice-salary-dot {

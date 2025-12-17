@@ -230,8 +230,13 @@ const SalaryPercentileChart = ({ salary }) => {
   const p90 = Number(salary.p90);
   if (![p25, p50, p75, p90].every((v) => Number.isFinite(v))) return null;
 
-  const min = Math.min(p25, p50, p75, p90);
-  const max = Math.max(p25, p50, p75, p90);
+  // 计算用户薪资区间（如果有）
+  const userBand = salary.userSalaryBand;
+  const userLo = userBand?.loCny;
+  const userHi = userBand?.hiCny;
+
+  const min = Math.min(p25, p50, p75, p90, userLo || p25, userHi || p25);
+  const max = Math.max(p25, p50, p75, p90, userLo || p90, userHi || p90);
   const pad = (max - min) * 0.08;
   const domainMin = min - pad;
   const domainMax = max + pad;
@@ -245,12 +250,24 @@ const SalaryPercentileChart = ({ salary }) => {
   const H = 70;
   const y = 34;
 
+  // 映射口径到友好文字
+  const getLevelText = (level) => {
+    if (level.includes('L1')) return '精准对标';
+    if (level.includes('L2')) return '较精准';
+    if (level.includes('L3')) return '宽泛对标';
+    if (level.includes('L4')) return '粗略对标';
+    return '口径未知';
+  };
+
   return (
     <div className="advice-viz-card">
       <div className="advice-viz-head">
         <div>
           <div className="advice-eyebrow">Salary · Percentiles</div>
           <h3 className="advice-card-title">薪资分布（同类人群参考）</h3>
+          <div className="advice-viz-subtitle">
+            可信度 {salary.confidence} · {getLevelText(salary.level)} · {salary.fx}
+          </div>
         </div>
         <div className="advice-viz-meta">
           <span className="advice-viz-pill">P50 {fmtMoney(p50)}</span>
@@ -261,6 +278,20 @@ const SalaryPercentileChart = ({ salary }) => {
       <svg viewBox={`0 0 ${W} ${H}`} className="advice-salary-chart" role="img" aria-label="Salary percentiles">
         {/* baseline */}
         <line x1="20" y1={y} x2={W - 20} y2={y} className="advice-salary-line" />
+
+        {/* 用户薪资区间高亮（如果有） */}
+        {userLo !== null && userHi !== null && (
+          <rect
+            x={20 + x(userLo, W - 40)}
+            y={y - 10}
+            width={Math.max(2, x(userHi, W - 40) - x(userLo, W - 40))}
+            height="20"
+            rx="4"
+            className="advice-salary-user-range"
+            opacity="0.15"
+          />
+        )}
+
         {/* range bar P25-P90 */}
         <rect
           x={20 + x(p25, W - 40)}
@@ -270,6 +301,7 @@ const SalaryPercentileChart = ({ salary }) => {
           rx="6"
           className="advice-salary-range"
         />
+
         {/* markers */}
         {[{ v: p25, k: 'P25' }, { v: p50, k: 'P50' }, { v: p75, k: 'P75' }, { v: p90, k: 'P90' }].map((it) => (
           <g key={it.k} transform={`translate(${20 + x(it.v, W - 40)}, ${y})`}>
@@ -282,13 +314,42 @@ const SalaryPercentileChart = ({ salary }) => {
             </text>
           </g>
         ))}
-      </svg>
 
-      <div className="advice-viz-foot">
-        <span>样本 n={salary.n}（可信度：{salary.confidence}）</span>
-        <span>口径：{salary.level}</span>
-        <span className="advice-viz-foot-muted">{salary.fx}</span>
-      </div>
+        {/* 用户薪资区间标记（如果有） */}
+        {userLo !== null && userHi !== null && (
+          <>
+            <line
+              x1={20 + x(userLo, W - 40)}
+              y1={y - 10}
+              x2={20 + x(userLo, W - 40)}
+              y2={y + 10}
+              stroke="rgba(255, 149, 0, 0.6)"
+              strokeWidth="2"
+              strokeDasharray="2,2"
+            />
+            <line
+              x1={20 + x(userHi, W - 40)}
+              y1={y - 10}
+              x2={20 + x(userHi, W - 40)}
+              y2={y + 10}
+              stroke="rgba(255, 149, 0, 0.6)"
+              strokeWidth="2"
+              strokeDasharray="2,2"
+            />
+            <text
+              x={20 + x((userLo + userHi) / 2, W - 40)}
+              y={y - 16}
+              textAnchor="middle"
+              className="advice-salary-user-label"
+              fill="rgba(255, 149, 0, 1)"
+              fontSize="11"
+              fontWeight="600"
+            >
+              你的区间
+            </text>
+          </>
+        )}
+      </svg>
     </div>
   );
 };
@@ -349,6 +410,15 @@ const AdviceDataView = ({ analysisText, adviceData }) => {
     return <RichTextBlock text={analysisText} />;
   }
 
+  // 映射口径到友好文字
+  const getLevelText = (level) => {
+    if (level.includes('T1')) return '精准';
+    if (level.includes('T2')) return '较精准';
+    if (level.includes('T3')) return '宽泛';
+    if (level.includes('T4')) return '粗略';
+    return '未知';
+  };
+
   return (
     <div className="advice-output">
       {salary ? <SalaryPercentileChart salary={salary} /> : null}
@@ -358,10 +428,12 @@ const AdviceDataView = ({ analysisText, adviceData }) => {
           <div className="advice-viz-head">
             <div>
               <div className="advice-eyebrow">Stack · Market Signals</div>
-              <h3 className="advice-card-title">技术栈建议（want vs have）</h3>
-            </div>
-            <div className="advice-viz-foot-muted">
-              口径回退：语言 {tech.cohort?.levels?.language} / 数据库 {tech.cohort?.levels?.database} / 框架 {tech.cohort?.levels?.webframe}
+              <h3 className="advice-card-title">技术栈建议（市场需求信号）</h3>
+              <div className="advice-viz-subtitle">
+                <strong>Want</strong> 想用占比 · <strong>Have</strong> 在用占比 · <strong>Gap</strong> 需求缺口 = Want - Have
+                <br />
+                对标精准度：语言 {getLevelText(tech.cohort?.levels?.language)} · 数据库 {getLevelText(tech.cohort?.levels?.database)} · 框架 {getLevelText(tech.cohort?.levels?.webframe)}
+              </div>
             </div>
           </div>
 
