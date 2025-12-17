@@ -294,14 +294,6 @@
 
 /* 底部生成建议按钮 */
 
-.advice-generate-section {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: flex-start;
-}
-
 .advice-generate-button {
   border-radius: 999px;
   border: none;
@@ -322,12 +314,6 @@
   box-shadow: 0 20px 52px rgba(0, 0, 0, 0.32);
 }
 
-.advice-generate-hint {
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--text-soft);
-}
-
 /* 5. 建议区 */
 
 .advice-section-bottom {
@@ -346,42 +332,9 @@
   flex-direction: column;
 }
 
-.advice-suggestion-textarea {
-  width: 100%;
-  min-height: 150px;
-  resize: vertical;
-  font-size: 0.86rem;
-}
-
 /* AI 按钮 */
 
-.advice-ai-button {
-  border-radius: 999px;
-  border: none;
-  padding: 6px 14px;
-  font-size: 0.8rem;
-  cursor: pointer;
-  background: #111111;
-  color: #ffffff;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
-  transition:
-    transform var(--transition-fast),
-    box-shadow var(--transition-fast),
-    background var(--transition-fast);
-}
-
-.advice-ai-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.32);
-}
-
 /* 通用：textarea 更贴合卡片风格 */
-
-.advice-suggestion-textarea,
-.advice-field textarea {
-  font-family: inherit;
-  line-height: 1.6;
-}
 
 /* 响应式 */
 
@@ -406,5 +359,174 @@
 
   .advice-hero-title {
     font-size: 1.9rem;
+  }
+}
+
+/* ✅ 建议区 Header：标题 + 右侧生成按钮（新增） */
+.advice-section-header-with-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.advice-section-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ✅ 右上角生成按钮：复用原按钮风格，做一个 inline 小号（新增） */
+.advice-generate-button-inline {
+  padding: 8px 16px;
+  font-size: 0.82rem;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+  white-space: nowrap;
+}
+
+.advice-generate-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.16);
+}
+
+.advice-generate-error {
+  margin: 8px 0 0;
+  font-size: 0.82rem;
+  color: rgba(200, 0, 0, 0.75);
+}
+
+/* ✅ 建议区：从左右两列改为上下分布（修改原有 advice-suggestions-grid） */
+.advice-suggestions-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr); /* ← 关键：单列 */
+  gap: 14px;
+}
+
+/* ✅ 你不再需要底部“生成建议按钮区”，可删除或保留（不影响运行）
+   - .advice-generate-section
+   - .advice-generate-hint
+*/
+
+/* ✅ 小屏下 Header：按钮换行更舒服（新增） */
+@media (max-width: 640px) {
+  .advice-section-header-with-action {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* ✅ 建议区 Header：标题 + 右侧生成按钮 */
+.advice-section-header-with-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.advice-section-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ✅ 右上角生成按钮：inline 小号 */
+.advice-generate-button-inline {
+  padding: 8px 16px;
+  font-size: 0.82rem;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+  white-space: nowrap;
+}
+
+.advice-generate-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.16);
+}
+
+.advice-generate-error {
+  margin: 8px 0 0;
+  font-size: 0.82rem;
+  color: rgba(200, 0, 0, 0.75);
+}
+
+/* ✅ 建议区：上下分布（单列） */
+.advice-suggestions-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+/* ✅ 建议区内容：文本展示（替代 textarea） */
+.advice-suggestion-text {
+  margin-top: 10px;
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.98);
+  font-size: 0.86rem;
+  line-height: 1.7;
+  color: var(--text-muted);
+  white-space: pre-wrap; /* 保留换行 */
+  word-break: break-word;
+  min-height: 150px; /* 与之前 textarea 视觉高度一致 */
+}
+
+/* ✅ 小屏：标题与按钮换行 */
+@media (max-width: 640px) {
+  .advice-section-header-with-action {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* ✅ Toast（新增） */
+.advice-toast {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  bottom: auto;
+  transform: translate(-50%, calc(-50% + 16px));
+  opacity: 0;
+  pointer-events: none;
+  z-index: 9999;
+
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  max-width: min(560px, calc(100vw - 24px));
+  word-break: break-word;
+
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.advice-toast-show {
+  opacity: 1;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.advice-toast-error {
+  background: rgba(17, 17, 17, 0.96);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.advice-toast-success {
+  background: rgba(255, 255, 255, 0.96);
+  color: #111;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+/* 小屏：toast 更贴底 */
+@media (max-width: 640px) {
+  .advice-toast {
+    bottom: 14px;
   }
 }
