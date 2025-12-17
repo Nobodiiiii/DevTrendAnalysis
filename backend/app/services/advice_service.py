@@ -34,9 +34,9 @@ MIN_N = 200
 
 # ✅ “绝对需求门槛”——防止小众项被 gap 顶上来
 # 你可以后面调参：想更“稳”就提高，想更“探索”就降低
-LANG_MIN_WANT = 0.08   # 语言：至少 8% 想用
-WEB_MIN_WANT = 0.08    # 框架：至少 8% 想用
-DB_MIN_WANT = 0.05     # 数据库：至少 5% 想用
+LANG_MIN_WANT = 0.08  # 语言：至少 8% 想用
+WEB_MIN_WANT = 0.08  # 框架：至少 8% 想用
+DB_MIN_WANT = 0.05  # 数据库：至少 5% 想用
 
 # “如果门槛下没有可推荐项”，自动降档的梯度（不至于空）
 RELAX_FACTORS = [1.0, 0.6, 0.3, 0.0]
@@ -74,7 +74,8 @@ _db_trend_df: Optional[DataFrame] = None
 _web_trend_df: Optional[DataFrame] = None
 
 
-def _ensure_tables() -> Tuple[SparkSession, DataFrame, DataFrame, DataFrame, DataFrame, DataFrame, DataFrame, DataFrame]:
+def _ensure_tables() -> Tuple[
+    SparkSession, DataFrame, DataFrame, DataFrame, DataFrame, DataFrame, DataFrame, DataFrame]:
     global _spark, _bench_l1, _bench_l2, _bench_l3, _bench_l4
     global _lang_trend_df, _db_trend_df, _web_trend_df
 
@@ -184,13 +185,13 @@ def _parse_salary_band_cny(band: str) -> Tuple[Optional[float], Optional[float]]
 # =========================
 
 def _bench_lookup_with_fallback(
-    bench_l1: DataFrame,
-    bench_l2: DataFrame,
-    bench_l3: DataFrame,
-    bench_l4: DataFrame,
-    emp: str,
-    wb: str,
-    fam: str,
+        bench_l1: DataFrame,
+        bench_l2: DataFrame,
+        bench_l3: DataFrame,
+        bench_l4: DataFrame,
+        emp: str,
+        wb: str,
+        fam: str,
 ) -> Tuple[Optional[Dict[str, Any]], str]:
     """
     回退顺序（直到命中且 n >= MIN_N；否则继续回退）：
@@ -282,26 +283,26 @@ def _trend_rollup(base_df: DataFrame, n_total: int) -> DataFrame:
     """
     rolled = (
         base_df.withColumn("have_cnt_est", F.col("have_rate") * F.col("n"))
-               .withColumn("want_cnt_est", F.col("want_rate") * F.col("n"))
-               .groupBy("tech")
-               .agg(
-                   F.sum("have_cnt_est").alias("have_cnt"),
-                   F.sum("want_cnt_est").alias("want_cnt"),
-               )
-               .withColumn("n", F.lit(int(n_total)))
-               .withColumn("have_rate", F.col("have_cnt") / F.col("n"))
-               .withColumn("want_rate", F.col("want_cnt") / F.col("n"))
-               .withColumn("gap", F.col("want_rate") - F.col("have_rate"))
-               .select("tech", "n", "have_rate", "want_rate", "gap")
+        .withColumn("want_cnt_est", F.col("want_rate") * F.col("n"))
+        .groupBy("tech")
+        .agg(
+            F.sum("have_cnt_est").alias("have_cnt"),
+            F.sum("want_cnt_est").alias("want_cnt"),
+        )
+        .withColumn("n", F.lit(int(n_total)))
+        .withColumn("have_rate", F.col("have_cnt") / F.col("n"))
+        .withColumn("want_rate", F.col("want_cnt") / F.col("n"))
+        .withColumn("gap", F.col("want_rate") - F.col("have_rate"))
+        .select("tech", "n", "have_rate", "want_rate", "gap")
     )
     return rolled
 
 
 def _trend_build_cohort_with_fallback(
-    trend_df: DataFrame,
-    wb: str,
-    fam: str,
-    min_n: int = MIN_N,
+        trend_df: DataFrame,
+        wb: str,
+        fam: str,
+        min_n: int = MIN_N,
 ) -> Tuple[Optional[DataFrame], str, int]:
     """
     回退顺序：
@@ -339,12 +340,12 @@ def _trend_build_cohort_with_fallback(
 
 
 def _trend_pick_recos(
-    cohort_df: DataFrame,
-    selected_set: set,
-    top_k: int,
-    *,
-    base_min_want_rate: float,
-    mode: str,  # "mainstream" | "gap"
+        cohort_df: DataFrame,
+        selected_set: set,
+        top_k: int,
+        *,
+        base_min_want_rate: float,
+        mode: str,  # "mainstream" | "gap"
 ) -> Tuple[List[str], float]:
     """
     两种推荐：
@@ -384,9 +385,9 @@ def _trend_pick_recos(
 
 
 def _trend_pick_chosen_popularity(
-    cohort_df: DataFrame,
-    selected_set: set,
-    limit_n: int = 3,
+        cohort_df: DataFrame,
+        selected_set: set,
+        limit_n: int = 3,
 ) -> List[str]:
     if cohort_df is None or not selected_set:
         return []
@@ -407,7 +408,11 @@ def _trend_pick_chosen_popularity(
 # Main API function
 # =========================
 
-def generate_advice(payload: Dict[str, Any]) -> Dict[str, str]:
+def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    生成职业建议数据（纯数据返回，不生成文本）
+    前端将使用返回的结构化数据生成用户友好的文本
+    """
     _, bench_l1, bench_l2, bench_l3, bench_l4, lang_df, db_df, web_df = _ensure_tables()
 
     tech = payload.get("techStack", {}) or {}
@@ -436,48 +441,42 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, str]:
     # ===== Salary benchmark (fallback)
     bench, level_used = _bench_lookup_with_fallback(bench_l1, bench_l2, bench_l3, bench_l4, emp, wb, fam)
 
-    salary_lines: List[str] = []
-    salary_lines.append(f"汇率口径：{FX_LABEL}（后端内部用 USD 计算，展示换算成人民币）")
-    salary_lines.append(f"薪资分位对标回退：若样本量 n < {MIN_N} 自动回退到更粗粒度。")
-
-    if bench is None:
-        salary_lines.append("薪资基准未命中（Gold 可能未生成或数据异常）。")
-    else:
+    # 构建薪资数据结构
+    salary_data: Optional[Dict[str, Any]] = None
+    if bench is not None:
         n = int(bench["n"])
         p25_usd, p50_usd, p75_usd, p90_usd = float(bench["p25"]), float(bench["p50"]), float(bench["p75"]), float(bench["p90"])
 
-        salary_lines.append(
-            f"**薪资对标（ConvertedCompYearly）**："
-            f"P25≈{_fmt_cny_from_usd(p25_usd)}，"
-            f"P50≈{_fmt_cny_from_usd(p50_usd)}，"
-            f"P75≈{_fmt_cny_from_usd(p75_usd)}，"
-            f"P90≈{_fmt_cny_from_usd(p90_usd)}（人民币/年）"
-        )
-        salary_lines.append(f"**对标粒度**：{level_used}；样本量 n={n}（可信度：{_confidence(n)}）")
-
-        if is_market_ref:
-            salary_lines.append("说明：你当前为学生，这里用“入门在职人群”的分位数做市场参考（非对你当前收入的判断）。")
-
+        # 解析用户薪资区间
+        user_salary_band_data: Optional[Dict[str, Any]] = None
         if salary_band:
             lo_cny, hi_cny = _parse_salary_band_cny(salary_band)
-            salary_lines.append(f"你填写的薪资区间（人民币/年）：{salary_band}")
-            if lo_cny is not None or hi_cny is not None:
-                lo_usd = _cny_to_usd(lo_cny) if lo_cny is not None else None
-                hi_usd = _cny_to_usd(hi_cny) if hi_cny is not None else None
+            user_salary_band_data = {
+                "text": salary_band,
+                "loCny": lo_cny,
+                "hiCny": hi_cny,
+                "loUsd": _cny_to_usd(lo_cny) if lo_cny is not None else None,
+                "hiUsd": _cny_to_usd(hi_cny) if hi_cny is not None else None,
+            }
 
-                def _pos_hint() -> str:
-                    if hi_usd is not None and hi_usd <= p25_usd:
-                        return "该区间上沿偏低于 P25（更偏保守）。"
-                    if lo_usd is not None and lo_usd >= p75_usd:
-                        return "该区间下沿已接近/高于 P75（更偏进取）。"
-                    if lo_usd is not None and hi_usd is not None:
-                        if hi_usd <= p50_usd:
-                            return "该区间主要落在 P50 以下。"
-                        if lo_usd >= p50_usd:
-                            return "该区间主要落在 P50 以上。"
-                    return "该区间与 P50/P75 存在重叠，取决于项目深度与匹配度。"
-
-                salary_lines.append(f"对齐提示：{_pos_hint()}")
+        salary_data = {
+            "currency": "CNY",
+            "fx": FX_LABEL,
+            "level": level_used,
+            "n": n,
+            "confidence": _confidence(n),
+            "minN": MIN_N,
+            "isMarketRef": is_market_ref,
+            "p25Usd": p25_usd,
+            "p50Usd": p50_usd,
+            "p75Usd": p75_usd,
+            "p90Usd": p90_usd,
+            "p25": _usd_to_cny(p25_usd),
+            "p50": _usd_to_cny(p50_usd),
+            "p75": _usd_to_cny(p75_usd),
+            "p90": _usd_to_cny(p90_usd),
+            "userSalaryBand": user_salary_band_data,
+        }
 
     # ===== Tech trends (fallback cohort)
     sel_lang_set = set([s.strip() for s in sel_lang if str(s).strip()])
@@ -488,115 +487,127 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, str]:
     db_cohort, db_lvl, db_n = _trend_build_cohort_with_fallback(db_df, wb, fam, min_n=MIN_N)
     web_cohort, web_lvl, web_n = _trend_build_cohort_with_fallback(web_df, wb, fam, min_n=MIN_N)
 
+    # ===== 辅助函数：将文本行解析为结构化数据
+    def _parse_reco_line(line: str) -> Optional[Dict[str, Any]]:
+        # - React（gap +12.3%，want 30.0% vs have 17.7%）
+        s = (line or "").strip().lstrip("-").strip()
+        m = re.search(r"^(.*?)（gap\s*([+\-]?\d+(?:\.\d+)?)%.*?want\s*(\d+(?:\.\d+)?)%\s*vs\s*have\s*(\d+(?:\.\d+)?)%）$", s)
+        if not m:
+            return None
+        tech = m.group(1).strip()
+        gap = float(m.group(2)) / 100.0
+        want = float(m.group(3)) / 100.0
+        have = float(m.group(4)) / 100.0
+        return {"tech": tech, "gap": gap, "want": want, "have": have}
+
+    def _parse_have_line(line: str) -> Optional[Dict[str, Any]]:
+        # - Python（在该统计口径中 have≈12.3%）
+        s = (line or "").strip().lstrip("-").strip()
+        m = re.search(r"^(.*?)（在该统计口径中 have≈(\d+(?:\.\d+)?)%）$", s)
+        if not m:
+            return None
+        return {"tech": m.group(1).strip(), "have": float(m.group(2)) / 100.0}
+
     # ===== Two-stage recommendations: mainstream + gap
     # language
-    lang_main, lang_main_thr = _trend_pick_recos(
+    lang_main_lines, lang_main_thr = _trend_pick_recos(
         lang_cohort, sel_lang_set, 3, base_min_want_rate=LANG_MIN_WANT, mode="mainstream"
     )
-    lang_gap, lang_gap_thr = _trend_pick_recos(
+    lang_gap_lines, lang_gap_thr = _trend_pick_recos(
         lang_cohort, sel_lang_set, 3, base_min_want_rate=LANG_MIN_WANT, mode="gap"
     )
 
     # database
-    db_main, db_main_thr = _trend_pick_recos(
+    db_main_lines, db_main_thr = _trend_pick_recos(
         db_cohort, sel_db_set, 3, base_min_want_rate=DB_MIN_WANT, mode="mainstream"
     )
-    db_gap, db_gap_thr = _trend_pick_recos(
+    db_gap_lines, db_gap_thr = _trend_pick_recos(
         db_cohort, sel_db_set, 3, base_min_want_rate=DB_MIN_WANT, mode="gap"
     )
 
     # webframe
-    web_main, web_main_thr = _trend_pick_recos(
+    web_main_lines, web_main_thr = _trend_pick_recos(
         web_cohort, sel_web_set, 3, base_min_want_rate=WEB_MIN_WANT, mode="mainstream"
     )
-    web_gap, web_gap_thr = _trend_pick_recos(
+    web_gap_lines, web_gap_thr = _trend_pick_recos(
         web_cohort, sel_web_set, 3, base_min_want_rate=WEB_MIN_WANT, mode="gap"
     )
 
-    chosen_lang = _trend_pick_chosen_popularity(lang_cohort, sel_lang_set, limit_n=3)
-    chosen_db = _trend_pick_chosen_popularity(db_cohort, sel_db_set, limit_n=3)
-    chosen_web = _trend_pick_chosen_popularity(web_cohort, sel_web_set, limit_n=3)
+    chosen_lang_lines = _trend_pick_chosen_popularity(lang_cohort, sel_lang_set, limit_n=3)
+    chosen_db_lines = _trend_pick_chosen_popularity(db_cohort, sel_db_set, limit_n=3)
+    chosen_web_lines = _trend_pick_chosen_popularity(web_cohort, sel_web_set, limit_n=3)
 
-    # ===== Build stack text
-    stack_lines: List[str] = []
-    stack_lines.append("**开发栈建议（两段式：先主流地基，再潜力加分）**：")
-    stack_lines.append(
-        f"（栈建议回退：语言={lang_lvl}/n≈{lang_n}；数据库={db_lvl}/n≈{db_n}；框架={web_lvl}/n≈{web_n}）"
-    )
+    # 解析为结构化数据
+    lang_main_items = [x for x in (_parse_reco_line(l) for l in (lang_main_lines or [])) if x]
+    lang_gap_items = [x for x in (_parse_reco_line(l) for l in (lang_gap_lines or [])) if x]
+    chosen_lang_items = [x for x in (_parse_have_line(l) for l in (chosen_lang_lines or [])) if x]
 
-    def _thr_note(base_thr: float, used_thr: float) -> str:
-        if used_thr >= base_thr - 1e-9:
-            return f"（want≥{base_thr:.0%}）"
-        if used_thr <= 1e-9:
-            return f"（want 门槛已放宽）"
-        return f"（want≥{used_thr:.0%}，原阈值 {base_thr:.0%}）"
+    db_main_items = [x for x in (_parse_reco_line(l) for l in (db_main_lines or [])) if x]
+    db_gap_items = [x for x in (_parse_reco_line(l) for l in (db_gap_lines or [])) if x]
+    chosen_db_items = [x for x in (_parse_have_line(l) for l in (chosen_db_lines or [])) if x]
 
-    # 语言
-    if lang_main:
-        stack_lines.append(f"\n语言 · 主流地基 {_thr_note(LANG_MIN_WANT, lang_main_thr)}")
-        stack_lines.extend(lang_main)
-    if lang_gap:
-        stack_lines.append(f"\n语言 · 潜力加分 {_thr_note(LANG_MIN_WANT, lang_gap_thr)}")
-        stack_lines.extend(lang_gap)
+    web_main_items = [x for x in (_parse_reco_line(l) for l in (web_main_lines or [])) if x]
+    web_gap_items = [x for x in (_parse_reco_line(l) for l in (web_gap_lines or [])) if x]
+    chosen_web_items = [x for x in (_parse_have_line(l) for l in (chosen_web_lines or [])) if x]
 
-    # 数据库
-    if db_main:
-        stack_lines.append(f"\n数据库 · 主流地基 {_thr_note(DB_MIN_WANT, db_main_thr)}")
-        stack_lines.extend(db_main)
-    if db_gap:
-        stack_lines.append(f"\n数据库 · 潜力加分 {_thr_note(DB_MIN_WANT, db_gap_thr)}")
-        stack_lines.extend(db_gap)
+    # 构建技术栈数据结构
+    tech_data = {
+        "cohort": {
+            "workexpBin": wb,
+            "devtypeFamily": fam,
+            "levels": {
+                "language": lang_lvl,
+                "database": db_lvl,
+                "webframe": web_lvl
+            },
+            "nUsed": {
+                "language": int(lang_n),
+                "database": int(db_n),
+                "webframe": int(web_n)
+            },
+        },
+        "thresholds": {
+            "language": {
+                "baseMinWant": LANG_MIN_WANT,
+                "mainstreamUsedThr": lang_main_thr,
+                "gapUsedThr": lang_gap_thr,
+            },
+            "database": {
+                "baseMinWant": DB_MIN_WANT,
+                "mainstreamUsedThr": db_main_thr,
+                "gapUsedThr": db_gap_thr,
+            },
+            "webframe": {
+                "baseMinWant": WEB_MIN_WANT,
+                "mainstreamUsedThr": web_main_thr,
+                "gapUsedThr": web_gap_thr,
+            },
+        },
+        "language": {
+            "mainstream": lang_main_items,
+            "gap": lang_gap_items,
+            "chosen": chosen_lang_items,
+        },
+        "database": {
+            "mainstream": db_main_items,
+            "gap": db_gap_items,
+            "chosen": chosen_db_items,
+        },
+        "webframe": {
+            "mainstream": web_main_items,
+            "gap": web_gap_items,
+            "chosen": chosen_web_items,
+        },
+    }
 
-    # 框架
-    if web_main:
-        stack_lines.append(f"\n框架/平台 · 主流地基 {_thr_note(WEB_MIN_WANT, web_main_thr)}")
-        stack_lines.extend(web_main)
-    if web_gap:
-        stack_lines.append(f"\n框架/平台 · 潜力加分 {_thr_note(WEB_MIN_WANT, web_gap_thr)}")
-        stack_lines.extend(web_gap)
-
-    if not (lang_main or lang_gap or db_main or db_gap or web_main or web_gap):
-        stack_lines.append(
-            "\n（当前统计口径下没有稳定可推荐项：要么你已选覆盖了主要技术，要么 cohort 太分散。建议直接对齐目标岗位 JD，补齐 1 个主栈 + 1 个数据库 + 1 个框架的项目闭环。）"
-        )
-
-    have_lines: List[str] = []
-    if chosen_lang or chosen_db or chosen_web:
-        have_lines.append("\n**你已选择的栈在统计口径中的普及度（have_rate 参考）**：")
-        if chosen_lang:
-            have_lines.append("语言")
-            have_lines.extend(chosen_lang)
-        if chosen_db:
-            have_lines.append("数据库")
-            have_lines.extend(chosen_db)
-        if chosen_web:
-            have_lines.append("框架/平台")
-            have_lines.extend(chosen_web)
-
-    # ===== analysisNote
-    analysis_parts: List[str] = []
-    analysis_parts.extend(salary_lines)
-    analysis_parts.append("")
-    analysis_parts.extend(stack_lines)
-    if have_lines:
-        analysis_parts.extend(have_lines)
-
-    # ===== aiSummary
-    ai_parts: List[str] = []
-    ai_parts.append("**下一步行动建议**：")
-
-    if bench is not None:
-        p50_usd = float(bench["p50"])
-        p75_usd = float(bench["p75"])
-        ai_parts.append(
-            f"- 目标薪资建议（人民币/年，按 {FX_LABEL}）：先对齐 P50≈{_fmt_cny_from_usd(p50_usd)}，再冲刺 P75≈{_fmt_cny_from_usd(p75_usd)}。"
-        )
-
-    ai_parts.append("- 先把“主流地基”补齐成可讲的闭环项目（能解释：选型理由、权衡、上线结果）。")
-    ai_parts.append("- 再挑 1 个“潜力加分”技术做深入（否则会变成到处沾一点但讲不深）。")
-    ai_parts.append("- 简历/面试表达：用 STAR/问题-方案-结果讲清楚你解决过的具体问题，并量化结果。")
-
+    # 返回纯数据结构
     return {
-        "analysisNote": "\n".join([x for x in analysis_parts if x is not None]),
-        "aiSummary": "\n".join(ai_parts),
+        "userProfile": {
+            "profileType": profile_type,
+            "workexpBin": wb,
+            "devtypeFamily": fam,
+            "track": track if profile_type == "student" else (payload.get("proProfile", {}) or {}).get("track", ""),
+        },
+        "salary": salary_data,
+        "tech": tech_data,
     }

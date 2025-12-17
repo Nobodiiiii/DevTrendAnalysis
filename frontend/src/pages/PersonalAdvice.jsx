@@ -134,6 +134,286 @@ const CAREER_TRACK_OPTIONS = [
   '暂未确定',
 ];
 
+
+
+// =========================
+// 建议区渲染：更像人话 + 图表
+// =========================
+
+const fmtMoney = (n) => {
+  if (n === null || n === undefined || Number.isNaN(Number(n))) return '-';
+  try {
+    return `¥${Number(n).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`;
+  } catch {
+    return `¥${Math.round(Number(n))}`;
+  }
+};
+
+const fmtPct = (x) => {
+  if (x === null || x === undefined || Number.isNaN(Number(x))) return '-';
+  return `${Math.round(Number(x) * 100)}%`;
+};
+
+const renderInlineBold = (text) => {
+  // 把 **bold** 变成 <strong>
+  const parts = String(text || '').split(/\*\*(.*?)\*\*/g);
+  return parts.map((p, idx) =>
+    idx % 2 === 1 ? (
+      <strong key={idx}>{p}</strong>
+    ) : (
+      <React.Fragment key={idx}>{p}</React.Fragment>
+    )
+  );
+};
+
+const RichTextBlock = ({ text }) => {
+  const lines = String(text || '').split(/\n/).filter((l) => l !== null && l !== undefined);
+  const nodes = [];
+  let list = [];
+
+  const flushList = () => {
+    if (!list.length) return;
+    nodes.push(
+      <ul className="advice-rt-list" key={`ul-${nodes.length}`}>
+        {list.map((it, idx) => (
+          <li key={idx}>{renderInlineBold(it)}</li>
+        ))}
+      </ul>
+    );
+    list = [];
+  };
+
+  lines.forEach((raw, idx) => {
+    const line = raw.trimEnd();
+
+    if (!line) {
+      flushList();
+      nodes.push(<div className="advice-rt-spacer" key={`sp-${idx}`} />);
+      return;
+    }
+
+    // 标题：**xxx**
+    const head = line.match(/^\*\*(.+?)\*\*$/);
+    if (head) {
+      flushList();
+      nodes.push(
+        <h4 className="advice-rt-h" key={`h-${idx}`}>
+          {head[1]}
+        </h4>
+      );
+      return;
+    }
+
+    // 列表：- xxx
+    if (line.startsWith('- ')) {
+      list.push(line.slice(2).trim());
+      return;
+    }
+
+    flushList();
+    nodes.push(
+      <p className="advice-rt-p" key={`p-${idx}`}>
+        {renderInlineBold(line)}
+      </p>
+    );
+  });
+
+  flushList();
+  return <div className="advice-rt">{nodes}</div>;
+};
+
+const SalaryPercentileChart = ({ salary }) => {
+  if (!salary) return null;
+  const p25 = Number(salary.p25);
+  const p50 = Number(salary.p50);
+  const p75 = Number(salary.p75);
+  const p90 = Number(salary.p90);
+  if (![p25, p50, p75, p90].every((v) => Number.isFinite(v))) return null;
+
+  const min = Math.min(p25, p50, p75, p90);
+  const max = Math.max(p25, p50, p75, p90);
+  const pad = (max - min) * 0.08;
+  const domainMin = min - pad;
+  const domainMax = max + pad;
+
+  const x = (v, w) => {
+    const t = (v - domainMin) / (domainMax - domainMin || 1);
+    return Math.max(0, Math.min(w, t * w));
+  };
+
+  const W = 520;
+  const H = 70;
+  const y = 34;
+
+  return (
+    <div className="advice-viz-card">
+      <div className="advice-viz-head">
+        <div>
+          <div className="advice-eyebrow">Salary · Percentiles</div>
+          <h3 className="advice-card-title">薪资分布（同类人群参考）</h3>
+        </div>
+        <div className="advice-viz-meta">
+          <span className="advice-viz-pill">P50 {fmtMoney(p50)}</span>
+          <span className="advice-viz-pill">P75 {fmtMoney(p75)}</span>
+        </div>
+      </div>
+
+      <svg viewBox={`0 0 ${W} ${H}`} className="advice-salary-chart" role="img" aria-label="Salary percentiles">
+        {/* baseline */}
+        <line x1="20" y1={y} x2={W - 20} y2={y} className="advice-salary-line" />
+        {/* range bar P25-P90 */}
+        <rect
+          x={20 + x(p25, W - 40)}
+          y={y - 6}
+          width={Math.max(2, x(p90, W - 40) - x(p25, W - 40))}
+          height="12"
+          rx="6"
+          className="advice-salary-range"
+        />
+        {/* markers */}
+        {[{ v: p25, k: 'P25' }, { v: p50, k: 'P50' }, { v: p75, k: 'P75' }, { v: p90, k: 'P90' }].map((it) => (
+          <g key={it.k} transform={`translate(${20 + x(it.v, W - 40)}, ${y})`}>
+            <circle r="6" className={it.k === 'P50' ? 'advice-salary-dot advice-salary-dot-mid' : 'advice-salary-dot'} />
+            <text y="-14" textAnchor="middle" className="advice-salary-label">
+              {it.k}
+            </text>
+            <text y="22" textAnchor="middle" className="advice-salary-value">
+              {fmtMoney(it.v)}
+            </text>
+          </g>
+        ))}
+      </svg>
+
+      <div className="advice-viz-foot">
+        <span>样本 n={salary.n}（可信度：{salary.confidence}）</span>
+        <span>口径：{salary.level}</span>
+        <span className="advice-viz-foot-muted">{salary.fx}</span>
+      </div>
+    </div>
+  );
+};
+
+const TechRecoBars = ({ title, items }) => {
+  if (!items?.length) return null;
+
+  return (
+    <div className="advice-tech-block">
+      <div className="advice-tech-block-title">{title}</div>
+      <div className="advice-tech-list">
+        {items.map((it) => {
+          const want = Number(it.want);
+          const have = Number(it.have);
+          const gap = Number(it.gap);
+          const wantPct = Number.isFinite(want) ? want : 0;
+          const havePct = Number.isFinite(have) ? have : 0;
+          const max = Math.max(wantPct, havePct, 0.001);
+          const wantW = Math.min(100, Math.round((wantPct / max) * 100));
+          const haveW = Math.min(100, Math.round((havePct / max) * 100));
+
+          return (
+            <div className="advice-tech-row" key={it.tech}>
+              <div className="advice-tech-row-head">
+                <span className="advice-tech-name">{it.tech}</span>
+                <span className="advice-tech-metrics">
+                  want {fmtPct(want)} · have {fmtPct(have)} · gap {fmtPct(gap)}
+                </span>
+              </div>
+              <div className="advice-tech-bars">
+                <div className="advice-tech-bar">
+                  <span className="advice-tech-bar-label">want</span>
+                  <span className="advice-tech-bar-track">
+                    <span className="advice-tech-bar-fill" style={{ width: `${wantW}%` }} />
+                  </span>
+                </div>
+                <div className="advice-tech-bar">
+                  <span className="advice-tech-bar-label">have</span>
+                  <span className="advice-tech-bar-track">
+                    <span className="advice-tech-bar-fill advice-tech-bar-fill-muted" style={{ width: `${haveW}%` }} />
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const AdviceDataView = ({ analysisText, adviceData }) => {
+  const salary = adviceData?.salary || null;
+  const tech = adviceData?.tech || null;
+
+  // 如果没有结构化数据，就退回文本
+  if (!salary && !tech) {
+    return <RichTextBlock text={analysisText} />;
+  }
+
+  return (
+    <div className="advice-output">
+      {salary ? <SalaryPercentileChart salary={salary} /> : null}
+
+      {tech ? (
+        <div className="advice-viz-card">
+          <div className="advice-viz-head">
+            <div>
+              <div className="advice-eyebrow">Stack · Market Signals</div>
+              <h3 className="advice-card-title">技术栈建议（want vs have）</h3>
+            </div>
+            <div className="advice-viz-foot-muted">
+              口径回退：语言 {tech.cohort?.levels?.language} / 数据库 {tech.cohort?.levels?.database} / 框架 {tech.cohort?.levels?.webframe}
+            </div>
+          </div>
+
+          <div className="advice-tech-grid-compact">
+            <div className="advice-tech-col">
+              <div className="advice-tech-col-title">语言</div>
+              <TechRecoBars title="主流地基（更稳）" items={tech.language?.mainstream} />
+              <TechRecoBars title="潜力加分（更亮）" items={tech.language?.gap} />
+            </div>
+            <div className="advice-tech-col">
+              <div className="advice-tech-col-title">数据库</div>
+              <TechRecoBars title="主流地基（更稳）" items={tech.database?.mainstream} />
+              <TechRecoBars title="潜力加分（更亮）" items={tech.database?.gap} />
+            </div>
+            <div className="advice-tech-col">
+              <div className="advice-tech-col-title">框架/平台</div>
+              <TechRecoBars title="主流地基（更稳）" items={tech.webframe?.mainstream} />
+              <TechRecoBars title="潜力加分（更亮）" items={tech.webframe?.gap} />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <details className="advice-details">
+        <summary>查看完整分析文本</summary>
+        <RichTextBlock text={analysisText} />
+      </details>
+    </div>
+  );
+};
+
+const AdviceChecklist = ({ text }) => {
+  const items = String(text || '')
+    .split(/\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith('- '))
+    .map((l) => l.slice(2).trim());
+
+  if (!items.length) return <RichTextBlock text={text} />;
+
+  return (
+    <div className="advice-checklist">
+      {items.map((it, idx) => (
+        <label className="advice-checkitem" key={idx}>
+          <input type="checkbox" />
+          <span>{renderInlineBold(it)}</span>
+        </label>
+      ))}
+    </div>
+  );
+};
+
 const PersonalAdvice = () => {
   const [techStack, setTechStack] = useState({
     languages: [],
@@ -163,9 +443,8 @@ const PersonalAdvice = () => {
     note: '',
   });
 
-  // 建议区内容：留给后端填充
-  const [analysisNote, setAnalysisNote] = useState('');
-  const [aiSummary, setAiSummary] = useState('');
+  // 建议区内容：后端返回的数据
+  const [adviceData, setAdviceData] = useState(null);
 
   const [hasGenerated, setHasGenerated] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -187,6 +466,132 @@ const PersonalAdvice = () => {
   };
 
   const emptyHint = useMemo(() => '点击右上方生成建议按钮生成。', []);
+
+  // ✅ 文本生成函数：将后端返回的数据转换为用户友好的文本
+  const generateAnalysisText = useMemo(() => {
+    if (!adviceData) return '';
+
+    const { userProfile, salary, tech } = adviceData;
+    const lines = [];
+
+    // 1. 用户画像
+    lines.push('**你现在的画像（用来做对标和建议）**');
+    lines.push(`- 方向：${userProfile.devtypeFamily}（由你选择的岗位方向映射）`);
+    lines.push(`- 经验：${userProfile.workexpBin} 年（按区间归档）`);
+    lines.push('');
+
+    // 2. 薪资对标
+    lines.push('**薪资对标（市场参考）**');
+    if (!salary) {
+      lines.push('- 暂时没拿到薪资基准数据（可能是数据未生成或口径命中失败）。');
+    } else {
+      lines.push(
+        `- 同类人群年薪大致在 **${fmtMoney(salary.p25)}（P25）— ${fmtMoney(salary.p90)}（P90）** 之间；` +
+        `中位数 P50 约 **${fmtMoney(salary.p50)}**。`
+      );
+      lines.push(
+        `- 参考口径：样本 n=${salary.n}（可信度：${salary.confidence}），对标粒度=${salary.level}，汇率口径=${salary.fx}。`
+      );
+
+      if (salary.isMarketRef) {
+        lines.push('- 你当前为学生：这里对标的是"入门在职人群"的市场分布，用来帮你定预期（不是对你当下收入的判断）。');
+      }
+
+      if (salary.userSalaryBand) {
+        const band = salary.userSalaryBand;
+        lines.push(`- 你填写的薪资区间：**${band.text}**`);
+
+        if (band.loCny !== null || band.hiCny !== null) {
+          const loUsd = band.loUsd;
+          const hiUsd = band.hiUsd;
+          const p25Usd = salary.p25Usd;
+          const p50Usd = salary.p50Usd;
+          const p75Usd = salary.p75Usd;
+
+          let hint = '';
+          if (hiUsd !== null && hiUsd <= p25Usd) {
+            hint = '整体偏保守（上沿都低于 P25）。';
+          } else if (loUsd !== null && loUsd >= p75Usd) {
+            hint = '整体偏进取（下沿已接近/高于 P75）。';
+          } else if (loUsd !== null && hiUsd !== null) {
+            if (hiUsd <= p50Usd) {
+              hint = '大概率落在 P50 以下。';
+            } else if (loUsd >= p50Usd) {
+              hint = '大概率落在 P50 以上。';
+            } else {
+              hint = '和 P50/P75 有重叠：更看项目深度、匹配度和面试发挥。';
+            }
+          }
+
+          if (hint) {
+            lines.push(`- 这档预期怎么看：${hint}`);
+          }
+        }
+      }
+    }
+
+    lines.push('');
+    lines.push('**技术栈怎么补（更像面试官能听懂的说法）**');
+    lines.push('- 先把"主流地基"补齐：让你能更稳定地拿到面试机会、也更容易做出可讲的项目。');
+    lines.push('- 再选 1 个"潜力加分"深挖：让你的简历有亮点，但不至于太分散。');
+
+    // 3. 技术栈建议
+    const hasAnyRecos =
+      tech.language.mainstream.length > 0 || tech.language.gap.length > 0 ||
+      tech.database.mainstream.length > 0 || tech.database.gap.length > 0 ||
+      tech.webframe.mainstream.length > 0 || tech.webframe.gap.length > 0;
+
+    if (!hasAnyRecos) {
+      lines.push('');
+      lines.push('- 你已选的栈覆盖度很高，或者同类样本很分散：建议直接对齐目标岗位 JD，补齐 **1 个主栈 + 1 个数据库 + 1 个框架** 的"可讲闭环项目"。');
+    }
+
+    // 已选技术的普及度
+    const hasChosen = tech.language.chosen.length > 0 || tech.database.chosen.length > 0 || tech.webframe.chosen.length > 0;
+    if (hasChosen) {
+      lines.push('');
+      lines.push('**你已选技术在同类人群中的普及度（参考）**');
+      if (tech.language.chosen.length > 0) {
+        lines.push('语言：');
+        tech.language.chosen.forEach(item => {
+          lines.push(`- ${item.tech}（在该统计口径中 have≈${fmtPct(item.have)}）`);
+        });
+      }
+      if (tech.database.chosen.length > 0) {
+        lines.push('数据库：');
+        tech.database.chosen.forEach(item => {
+          lines.push(`- ${item.tech}（在该统计口径中 have≈${fmtPct(item.have)}）`);
+        });
+      }
+      if (tech.webframe.chosen.length > 0) {
+        lines.push('框架/平台：');
+        tech.webframe.chosen.forEach(item => {
+          lines.push(`- ${item.tech}（在该统计口径中 have≈${fmtPct(item.have)}）`);
+        });
+      }
+    }
+
+    return lines.join('\n');
+  }, [adviceData]);
+
+  const generateAiSummary = useMemo(() => {
+    if (!adviceData) return '';
+
+    const { salary } = adviceData;
+    const lines = [];
+
+    lines.push('**下一步建议（直接照做版）**');
+
+    if (salary) {
+      lines.push(`- 薪资目标：先把预期对齐到 **P50（约 ${fmtMoney(salary.p50)}/年）**，有强项目再冲 **P75（约 ${fmtMoney(salary.p75)}/年）**。`);
+    }
+
+    lines.push('- 项目打法：用 1 个主项目把"选型 → 方案 → 结果"讲完整（最好能量化：性能/成本/转化/稳定性）。');
+    lines.push('- 技术策略：主流地基选 2–3 个稳住面试，通过后再用 1 个加分项拉开差距。');
+    lines.push('- 面试表达：用 STAR（背景-任务-行动-结果）把故事讲短讲清，避免只堆技术名词。');
+
+    return lines.join('\n');
+  }, [adviceData]);
 
   const handleTechToggle = (group, value) => {
     setTechStack((prev) => {
@@ -274,7 +679,6 @@ const PersonalAdvice = () => {
         otherInfo,
       };
 
-      // TODO: 替换为你的真实后端接口
       const resp = await fetch('/api/advises/personal-advice/generate', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -288,11 +692,9 @@ const PersonalAdvice = () => {
         throw new Error(errText || 'Request failed');
       }
       const data = await resp.json();
-      setAnalysisNote(data?.analysisNote ?? '');
-      setAiSummary(data?.aiSummary ?? '');
+      setAdviceData(data);
 
       setHasGenerated(true);
-      // showToast('已提交生成请求', 'success'); // 如果你想成功也提示
     } catch (err) {
       setGenerateError('生成失败，请稍后重试。');
       showToast('生成失败，请稍后重试。');
@@ -647,8 +1049,8 @@ const PersonalAdvice = () => {
                 <h3 className="advice-card-title">数据分析建议</h3>
               </div>
             </div>
-            <div className="advice-suggestion-text">
-              {!hasGenerated || !analysisNote?.trim() ? emptyHint : analysisNote}
+            <div className="advice-suggestion-body">
+              {!hasGenerated || !generateAnalysisText ? emptyHint : <AdviceDataView analysisText={generateAnalysisText} adviceData={adviceData} />}
             </div>
           </div>
 
@@ -659,8 +1061,8 @@ const PersonalAdvice = () => {
                 <h3 className="advice-card-title">AI 建议</h3>
               </div>
             </div>
-            <div className="advice-suggestion-text">
-              {!hasGenerated || !aiSummary?.trim() ? emptyHint : aiSummary}
+            <div className="advice-suggestion-body">
+              {!hasGenerated || !generateAiSummary ? emptyHint : <AdviceChecklist text={generateAiSummary} />}
             </div>
           </div>
         </div>

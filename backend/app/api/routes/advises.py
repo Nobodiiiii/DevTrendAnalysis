@@ -41,9 +41,63 @@ class AdvicePayload(BaseModel):
     otherInfo: OtherInfo
 
 
+class UserProfile(BaseModel):
+    profileType: str
+    workexpBin: str
+    devtypeFamily: str
+    track: str
+
+
+class SalaryData(BaseModel):
+    currency: str
+    fx: str
+    level: str
+    n: int
+    confidence: str
+    minN: int
+    isMarketRef: bool
+    p25Usd: float
+    p50Usd: float
+    p75Usd: float
+    p90Usd: float
+    p25: float
+    p50: float
+    p75: float
+    p90: float
+    userSalaryBand: dict = None
+
+
+class TechItem(BaseModel):
+    tech: str
+    gap: float = None
+    want: float = None
+    have: float = None
+
+
+class TechCategory(BaseModel):
+    mainstream: List[TechItem]
+    gap: List[TechItem]
+    chosen: List[TechItem]
+
+
+class TechThresholds(BaseModel):
+    baseMinWant: float
+    mainstreamUsedThr: float
+    gapUsedThr: float
+
+
+class TechData(BaseModel):
+    cohort: dict
+    thresholds: dict
+    language: TechCategory
+    database: TechCategory
+    webframe: TechCategory
+
+
 class AdviceResponse(BaseModel):
-    analysisNote: str
-    aiSummary: str = ""
+    userProfile: UserProfile
+    salary: SalaryData = None
+    tech: TechData
 
 
 def _validate(p: AdvicePayload) -> None:
@@ -84,10 +138,7 @@ def generate_personal_advice(payload: AdvicePayload) -> AdviceResponse:
     _validate(payload)
     try:
         result = generate_advice(payload.model_dump())
-        return AdviceResponse(
-            analysisNote=result.get("analysisNote", ""),
-            aiSummary=result.get("aiSummary", ""),
-        )
+        return AdviceResponse(**result)
     except HTTPException:
         raise
     except Exception as e:

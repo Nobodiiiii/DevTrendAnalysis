@@ -530,3 +530,277 @@
     bottom: 14px;
   }
 }
+
+
+/* =========================
+   建议区：更像人话 + 图表
+   ========================= */
+
+.advice-suggestion-body {
+  margin-top: 10px;
+}
+
+/* 可视化卡片（嵌在建议区里） */
+.advice-viz-card {
+  border-radius: 18px;
+  padding: 14px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+  margin-bottom: 12px;
+}
+
+.advice-viz-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.advice-viz-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.advice-viz-pill {
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.78rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.advice-viz-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 0.78rem;
+  color: var(--text-soft);
+  margin-top: 10px;
+}
+
+.advice-viz-foot-muted {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+}
+
+/* 薪资图表 */
+.advice-salary-chart {
+  width: 100%;
+  height: auto;
+  margin-top: 6px;
+}
+
+.advice-salary-line {
+  stroke: rgba(17, 17, 17, 0.18);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.advice-salary-range {
+  fill: rgba(17, 17, 17, 0.18);
+}
+
+.advice-salary-dot {
+  fill: rgba(17, 17, 17, 0.7);
+}
+
+.advice-salary-dot-mid {
+  fill: #111111;
+}
+
+.advice-salary-label {
+  font-size: 11px;
+  fill: rgba(17, 17, 17, 0.6);
+}
+
+.advice-salary-value {
+  font-size: 11px;
+  fill: rgba(17, 17, 17, 0.85);
+}
+
+/* 技术推荐条形 */
+.advice-tech-grid-compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.advice-tech-col {
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 10px 10px;
+  background: rgba(250, 250, 252, 0.8);
+}
+
+.advice-tech-col-title {
+  font-size: 0.9rem;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.advice-tech-block {
+  margin-bottom: 10px;
+}
+
+.advice-tech-block-title {
+  font-size: 0.82rem;
+  color: var(--text-soft);
+  margin: 4px 0 8px;
+}
+
+.advice-tech-row {
+  padding: 8px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.9);
+  margin-bottom: 8px;
+}
+
+.advice-tech-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.advice-tech-name {
+  font-size: 0.88rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.advice-tech-metrics {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.advice-tech-bars {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.advice-tech-bar {
+  display: grid;
+  grid-template-columns: 46px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.advice-tech-bar-label {
+  font-size: 0.74rem;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.advice-tech-bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(17, 17, 17, 0.08);
+  overflow: hidden;
+}
+
+.advice-tech-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: rgba(17, 17, 17, 0.72);
+}
+
+.advice-tech-bar-fill-muted {
+  background: rgba(17, 17, 17, 0.38);
+}
+
+/* “完整文本”折叠 */
+.advice-details {
+  margin-top: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 10px 12px;
+}
+
+.advice-details summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 0.86rem;
+}
+
+.advice-details[open] summary {
+  margin-bottom: 10px;
+}
+
+/* 富文本（人话排版） */
+.advice-rt-h {
+  margin: 6px 0 6px;
+  font-size: 0.95rem;
+  color: var(--accent);
+}
+
+.advice-rt-p {
+  margin: 6px 0;
+  font-size: 0.86rem;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+.advice-rt-list {
+  margin: 6px 0 10px 18px;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  line-height: 1.7;
+}
+
+.advice-rt-spacer {
+  height: 6px;
+}
+
+/* 行动清单 */
+.advice-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.advice-checkitem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.98);
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.advice-checkitem:hover {
+  transform: translateY(-0.5px);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.1);
+}
+
+.advice-checkitem input {
+  margin-top: 2px;
+}
+
+/* 宽屏：技术栈 3 列更舒服 */
+@media (min-width: 980px) {
+  .advice-tech-grid-compact {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .advice-tech-bars {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+}
