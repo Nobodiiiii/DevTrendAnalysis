@@ -822,3 +822,79 @@
     gap: 8px;
   }
 }
+
+/* =========================
+   进阶建议卡片样式
+   ========================= */
+
+.advice-adv-card {
+  background: linear-gradient(135deg, rgba(255, 149, 0, 0.06) 0%, rgba(255, 255, 255, 0.98) 50%);
+  border-color: rgba(255, 149, 0, 0.15);
+}
+
+.advice-adv-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+@media (min-width: 640px) {
+  .advice-adv-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.advice-adv-category {
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.advice-adv-category-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.advice-adv-item {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 149, 0, 0.06);
+  border: 1px solid rgba(255, 149, 0, 0.12);
+  margin-bottom: 6px;
+}
+
+.advice-adv-item:last-child {
+  margin-bottom: 0;
+}
+
+.advice-adv-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.advice-adv-tech {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.advice-adv-lift {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(255, 149, 0, 1);
+  background: rgba(255, 149, 0, 0.12);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.advice-adv-item-detail {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+  margin-top: 4px;
+}

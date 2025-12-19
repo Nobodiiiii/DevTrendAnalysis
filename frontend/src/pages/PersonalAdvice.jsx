@@ -401,9 +401,60 @@ const TechRecoBars = ({ title, items }) => {
   );
 };
 
+// 进阶建议组件
+const AdvancementCard = ({ advancement }) => {
+  if (!advancement || !advancement.available) return null;
+
+  const { currentLevel, targetLevel, language, database, webframe } = advancement;
+
+  const hasItems = language?.length > 0 || database?.length > 0 || webframe?.length > 0;
+  if (!hasItems) return null;
+
+  const renderItems = (items, category) => {
+    if (!items?.length) return null;
+    return (
+      <div className="advice-adv-category">
+        <div className="advice-adv-category-title">{category}</div>
+        {items.map((item) => (
+          <div className="advice-adv-item" key={item.tech}>
+            <div className="advice-adv-item-head">
+              <span className="advice-adv-tech">{item.tech}</span>
+              <span className="advice-adv-lift">+{fmtPct(item.lift)}</span>
+            </div>
+            <div className="advice-adv-item-detail">
+              进阶人群 {fmtPct(item.targetHave)} vs 当前 {fmtPct(item.currentHave)}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div className="advice-viz-card advice-adv-card">
+      <div className="advice-viz-head">
+        <div>
+          <div className="advice-eyebrow">Advancement · Career Path</div>
+          <h3 className="advice-card-title">想提薪？这些技术值得学</h3>
+          <div className="advice-viz-subtitle">
+            从 <strong>{currentLevel} 年</strong> 进阶到 <strong>{targetLevel} 年</strong>，这些技术在进阶人群中更普及
+          </div>
+        </div>
+      </div>
+
+      <div className="advice-adv-grid">
+        {renderItems(language, '语言')}
+        {renderItems(database, '数据库')}
+        {renderItems(webframe, '框架/平台')}
+      </div>
+    </div>
+  );
+};
+
 const AdviceDataView = ({ analysisText, adviceData }) => {
   const salary = adviceData?.salary || null;
   const tech = adviceData?.tech || null;
+  const advancement = adviceData?.advancement || null;
 
   // 如果没有结构化数据，就退回文本
   if (!salary && !tech) {
@@ -456,6 +507,9 @@ const AdviceDataView = ({ analysisText, adviceData }) => {
           </div>
         </div>
       ) : null}
+
+      {/* 进阶建议 */}
+      <AdvancementCard advancement={advancement} />
 
       <details className="advice-details">
         <summary>查看完整分析文本</summary>

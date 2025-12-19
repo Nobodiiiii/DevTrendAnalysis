@@ -57,6 +57,20 @@ TRACK_TO_FAMILY = {
     "暂未确定": "other",
 }
 
+# ✅ 经验层级进阶映射
+WORKEXP_ADVANCEMENT = {
+    "0-1": "2-3",
+    "2-3": "4-6",
+    "4-6": "7-10",
+    "7-10": "11-15",
+    "11-15": "16+",
+    "16+": None,  # 最高层级，无进阶
+}
+
+# ✅ 进阶推荐阈值
+ADV_MIN_LIFT = 0.05  # 进阶人群 have_rate 至少比当前高 5%
+ADV_MIN_TARGET_HAVE = 0.10  # 进阶人群 have_rate 至少 10%
+
 # =========================
 # Spark cache
 # =========================
@@ -600,6 +614,80 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
         },
     }
 
+    # ===== 进阶建议：查询进阶人群的技术画像
+    advancement_data: Optional[Dict[str, Any]] = None
+    target_wb = WORKEXP_ADVANCEMENT.get(wb)
+
+    if target_wb is not None:
+        # 查询进阶人群的技术趋势
+        adv_lang_cohort, adv_lang_lvl, adv_lang_n = _trend_build_cohort_with_fallback(
+            lang_df, target_wb, fam, min_n=MIN_N
+        )
+        adv_db_cohort, adv_db_lvl, adv_db_n = _trend_build_cohort_with_fallback(
+            db_df, target_wb, fam, min_n=MIN_N
+        )
+        adv_web_cohort, adv_web_lvl, adv_web_n = _trend_build_cohort_with_fallback(
+            web_df, target_wb, fam, min_n=MIN_N
+        )
+
+        def _compute_advancement_items(
+            current_cohort: Optional[DataFrame],
+            target_cohort: Optional[DataFrame],
+            selected_set: set,
+            top_k: int = 2,
+        ) -> List[Dict[str, Any]]:
+            """计算进阶增益：找出进阶人群中更普及但用户未选的技术"""
+            if current_cohort is None or target_cohort is None:
+                return []
+
+            # 获取当前人群和进阶人群的 have_rate
+            current_rows = current_cohort.select("tech", "have_rate").collect()
+            target_rows = target_cohort.select("tech", "have_rate").collect()
+
+            current_map = {r["tech"]: float(r["have_rate"]) for r in current_rows}
+            target_map = {r["tech"]: float(r["have_rate"]) for r in target_rows}
+
+            # 计算增益
+            candidates = []
+            for tech, target_have in target_map.items():
+                # 跳过用户已选的技术
+                if tech in selected_set:
+                    continue
+                # 进阶人群 have_rate 必须达到最低门槛
+                if target_have < ADV_MIN_TARGET_HAVE:
+                    continue
+                current_have = current_map.get(tech, 0.0)
+                lift = target_have - current_have
+                # 增益必须达到最低门槛
+                if lift < ADV_MIN_LIFT:
+                    continue
+                candidates.append({
+                    "tech": tech,
+                    "currentHave": current_have,
+                    "targetHave": target_have,
+                    "lift": lift,
+                })
+
+            # 按增益降序排序，取 top_k
+            candidates.sort(key=lambda x: x["lift"], reverse=True)
+            return candidates[:top_k]
+
+        adv_lang_items = _compute_advancement_items(lang_cohort, adv_lang_cohort, sel_lang_set, top_k=2)
+        adv_db_items = _compute_advancement_items(db_cohort, adv_db_cohort, sel_db_set, top_k=2)
+        adv_web_items = _compute_advancement_items(web_cohort, adv_web_cohort, sel_web_set, top_k=2)
+
+        # 只有当有推荐项时才返回进阶数据
+        has_any_advancement = bool(adv_lang_items or adv_db_items or adv_web_items)
+
+        advancement_data = {
+            "currentLevel": wb,
+            "targetLevel": target_wb,
+            "available": has_any_advancement,
+            "language": adv_lang_items,
+            "database": adv_db_items,
+            "webframe": adv_web_items,
+        }
+
     # 返回纯数据结构
     return {
         "userProfile": {
@@ -610,4 +698,5 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
         },
         "salary": salary_data,
         "tech": tech_data,
+        "advancement": advancement_data,
     }

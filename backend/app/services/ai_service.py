@@ -9,8 +9,8 @@ client = OpenAI(
 response = client.chat.completions.create(
     model="deepseek-reasoner",
     messages=[
-        {"role": "system", "content": "你是一个帅哥，请用中文回答"},
-        {"role": "user", "content": "请帮我夸一夸马牧天，他比你还帅"},
+        {"role": "system", "content": ""},
+        {"role": "user", "content": ""},
     ],
     stream=False
 )

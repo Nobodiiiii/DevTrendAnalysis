@@ -94,10 +94,27 @@ class TechData(BaseModel):
     webframe: TechCategory
 
 
+class AdvancementItem(BaseModel):
+    tech: str
+    currentHave: float
+    targetHave: float
+    lift: float
+
+
+class AdvancementData(BaseModel):
+    currentLevel: str
+    targetLevel: str
+    available: bool
+    language: List[AdvancementItem]
+    database: List[AdvancementItem]
+    webframe: List[AdvancementItem]
+
+
 class AdviceResponse(BaseModel):
     userProfile: UserProfile
     salary: SalaryData = None
     tech: TechData
+    advancement: AdvancementData = None
 
 
 def _validate(p: AdvicePayload) -> None:
