@@ -13,6 +13,7 @@ class TechStack(BaseModel):
     languages: List[str] = Field(default_factory=list)
     webframes: List[str] = Field(default_factory=list)
     databases: List[str] = Field(default_factory=list)
+    platforms: List[str] = Field(default_factory=list)
 
 
 class StudentProfile(BaseModel):
@@ -92,6 +93,7 @@ class TechData(BaseModel):
     language: TechCategory
     database: TechCategory
     webframe: TechCategory
+    platform: TechCategory
 
 
 class AdvancementItem(BaseModel):
@@ -108,6 +110,39 @@ class AdvancementData(BaseModel):
     language: List[AdvancementItem]
     database: List[AdvancementItem]
     webframe: List[AdvancementItem]
+    platform: List[AdvancementItem]
+
+
+# ✅ 高薪vs低薪技术差异模型
+class SalaryTierTechItem(BaseModel):
+    tech: str
+    highHave: float
+    lowHave: float
+    diff: float
+    userHas: bool
+
+
+class SalaryTierTechMeta(BaseModel):
+    available: bool
+    highN: int = None
+    lowN: int = None
+    devtypeFamily: str = None
+    reason: str = None
+
+
+class SalaryTierTechCategory(BaseModel):
+    missing: List[SalaryTierTechItem]
+    has: List[SalaryTierTechItem]
+    meta: SalaryTierTechMeta
+
+
+class SalaryTierTechData(BaseModel):
+    available: bool
+    devtypeFamily: str
+    language: SalaryTierTechCategory
+    database: SalaryTierTechCategory
+    webframe: SalaryTierTechCategory
+    platform: SalaryTierTechCategory
 
 
 class AdviceResponse(BaseModel):
@@ -115,6 +150,7 @@ class AdviceResponse(BaseModel):
     salary: SalaryData = None
     tech: TechData
     advancement: AdvancementData = None
+    salaryTierTech: SalaryTierTechData = None
 
 
 def _validate(p: AdvicePayload) -> None:

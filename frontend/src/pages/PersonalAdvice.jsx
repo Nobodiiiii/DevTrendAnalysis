@@ -113,6 +113,43 @@ const WEBFRAME_OPTIONS = [
   'Drupal',
 ];
 
+// ✅ 平台/工具（2025 特供，按 Have 从高到低）
+const PLATFORM_OPTIONS = [
+  'Docker',
+  'npm',
+  'Amazon Web Services (AWS)',
+  'Pip',
+  'Homebrew',
+  'Kubernetes',
+  'Microsoft Azure',
+  'Google Cloud',
+  'Terraform',
+  'Vercel',
+  'Vite',
+  'Webpack',
+  'Yarn',
+  'pnpm',
+  'Cloudflare',
+  'Netlify',
+  'Firebase',
+  'DigitalOcean',
+  'Heroku',
+  'Fly.io',
+  'Supabase',
+  'VMware',
+  'Hetzner',
+  'Linode',
+  'Render',
+  'Vultr',
+  'OVHcloud',
+  'Managed Kubernetes',
+  'Podman',
+  'OpenShift',
+  'Corepack',
+  'OpenStack',
+  'Colocation',
+];
+
 const SALARY_BAND_OPTIONS = [
   '暂不透露',
   '< 20 万 / 年',
@@ -267,6 +304,8 @@ const SalaryPercentileChart = ({ salary }) => {
           <h3 className="advice-card-title">薪资分布（同类人群参考）</h3>
           <div className="advice-viz-subtitle">
             可信度 {salary.confidence} · {getLevelText(salary.level)} · {salary.fx}
+            <br />
+            P 表示百分位数：P50 意为有 50% 的人薪资低于此值，P75 则表示超过 75% 的人。
           </div>
         </div>
         <div className="advice-viz-meta">
@@ -279,12 +318,12 @@ const SalaryPercentileChart = ({ salary }) => {
         {/* baseline */}
         <line x1="20" y1={y} x2={W - 20} y2={y} className="advice-salary-line" />
 
-        {/* 用户薪资区间高亮（如果有） */}
-        {userLo !== null && userHi !== null && (
+        {/* 用户薪资区间高亮（如果有任一边界） */}
+        {(userLo !== null || userHi !== null) && (
           <rect
-            x={20 + x(userLo, W - 40)}
+            x={20 + x(userLo !== null ? userLo : domainMin, W - 40)}
             y={y - 10}
-            width={Math.max(2, x(userHi, W - 40) - x(userLo, W - 40))}
+            width={Math.max(2, x(userHi !== null ? userHi : domainMax, W - 40) - x(userLo !== null ? userLo : domainMin, W - 40))}
             height="20"
             rx="4"
             className="advice-salary-user-range"
@@ -315,40 +354,48 @@ const SalaryPercentileChart = ({ salary }) => {
           </g>
         ))}
 
-        {/* 用户薪资区间标记（如果有） */}
-        {userLo !== null && userHi !== null && (
-          <>
-            <line
-              x1={20 + x(userLo, W - 40)}
-              y1={y - 10}
-              x2={20 + x(userLo, W - 40)}
-              y2={y + 10}
-              stroke="rgba(255, 149, 0, 0.6)"
-              strokeWidth="2"
-              strokeDasharray="2,2"
-            />
-            <line
-              x1={20 + x(userHi, W - 40)}
-              y1={y - 10}
-              x2={20 + x(userHi, W - 40)}
-              y2={y + 10}
-              stroke="rgba(255, 149, 0, 0.6)"
-              strokeWidth="2"
-              strokeDasharray="2,2"
-            />
+        {/* 用户薪资区间标记（分别渲染左右边界，出界时渲染到顶端） */}
+        {userLo !== null && (
+          <line
+            x1={userLo < domainMin ? 20 : 20 + x(userLo, W - 40)}
+            y1={y - 10}
+            x2={userLo < domainMin ? 20 : 20 + x(userLo, W - 40)}
+            y2={y + 10}
+            stroke="rgba(59, 130, 246, 0.6)"
+            strokeWidth="2"
+            strokeDasharray="2,2"
+          />
+        )}
+        {userHi !== null && (
+          <line
+            x1={userHi > domainMax ? W - 20 : 20 + x(userHi, W - 40)}
+            y1={y - 10}
+            x2={userHi > domainMax ? W - 20 : 20 + x(userHi, W - 40)}
+            y2={y + 10}
+            stroke="rgba(59, 130, 246, 0.6)"
+            strokeWidth="2"
+            strokeDasharray="2,2"
+          />
+        )}
+        {(userLo !== null || userHi !== null) && (() => {
+          // 计算"你的区间"文字位置：取实际边界的中间位置
+          const loX = userLo !== null ? (userLo < domainMin ? 20 : 20 + x(userLo, W - 40)) : 20;
+          const hiX = userHi !== null ? (userHi > domainMax ? W - 20 : 20 + x(userHi, W - 40)) : W - 20;
+          const midX = (loX + hiX) / 2;
+          return (
             <text
-              x={20 + x((userLo + userHi) / 2, W - 40)}
+              x={midX}
               y={y - 16}
               textAnchor="middle"
               className="advice-salary-user-label"
-              fill="rgba(255, 149, 0, 1)"
+              fill="rgba(59, 130, 246, 1)"
               fontSize="11"
               fontWeight="600"
             >
               你的区间
             </text>
-          </>
-        )}
+          );
+        })()}
       </svg>
     </div>
   );
@@ -358,45 +405,25 @@ const TechRecoBars = ({ title, items }) => {
   if (!items?.length) return null;
 
   return (
-    <div className="advice-tech-block">
-      <div className="advice-tech-block-title">{title}</div>
-      <div className="advice-tech-list">
-        {items.map((it) => {
-          const want = Number(it.want);
-          const have = Number(it.have);
-          const gap = Number(it.gap);
-          const wantPct = Number.isFinite(want) ? want : 0;
-          const havePct = Number.isFinite(have) ? have : 0;
-          const max = Math.max(wantPct, havePct, 0.001);
-          const wantW = Math.min(100, Math.round((wantPct / max) * 100));
-          const haveW = Math.min(100, Math.round((havePct / max) * 100));
+    <div className="advice-tech-reco-category">
+      <div className="advice-tech-reco-category-title">{title}</div>
+      {items.map((it) => {
+        const want = Number(it.want);
+        const have = Number(it.have);
+        const gap = Number(it.gap);
 
-          return (
-            <div className="advice-tech-row" key={it.tech}>
-              <div className="advice-tech-row-head">
-                <span className="advice-tech-name">{it.tech}</span>
-                <span className="advice-tech-metrics">
-                  want {fmtPct(want)} · have {fmtPct(have)} · gap {fmtPct(gap)}
-                </span>
-              </div>
-              <div className="advice-tech-bars">
-                <div className="advice-tech-bar">
-                  <span className="advice-tech-bar-label">want</span>
-                  <span className="advice-tech-bar-track">
-                    <span className="advice-tech-bar-fill" style={{ width: `${wantW}%` }} />
-                  </span>
-                </div>
-                <div className="advice-tech-bar">
-                  <span className="advice-tech-bar-label">have</span>
-                  <span className="advice-tech-bar-track">
-                    <span className="advice-tech-bar-fill advice-tech-bar-fill-muted" style={{ width: `${haveW}%` }} />
-                  </span>
-                </div>
-              </div>
+        return (
+          <div className="advice-tech-reco-item" key={it.tech}>
+            <div className="advice-tech-reco-item-head">
+              <span className="advice-tech-reco-tech">{it.tech}</span>
+              {gap > 0 && <span className="advice-tech-reco-gap">gap+{fmtPct(gap)}</span>}
             </div>
-          );
-        })}
-      </div>
+            <div className="advice-tech-reco-item-detail">
+              Want {fmtPct(want)} · Have {fmtPct(have)}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 };
@@ -405,9 +432,9 @@ const TechRecoBars = ({ title, items }) => {
 const AdvancementCard = ({ advancement }) => {
   if (!advancement || !advancement.available) return null;
 
-  const { currentLevel, targetLevel, language, database, webframe } = advancement;
+  const { currentLevel, targetLevel, language, database, webframe, platform } = advancement;
 
-  const hasItems = language?.length > 0 || database?.length > 0 || webframe?.length > 0;
+  const hasItems = language?.length > 0 || database?.length > 0 || webframe?.length > 0 || platform?.length > 0;
   if (!hasItems) return null;
 
   const renderItems = (items, category) => {
@@ -445,8 +472,96 @@ const AdvancementCard = ({ advancement }) => {
       <div className="advice-adv-grid">
         {renderItems(language, '语言')}
         {renderItems(database, '数据库')}
-        {renderItems(webframe, '框架/平台')}
+        {renderItems(webframe, '框架')}
+        {renderItems(platform, '平台/工具')}
       </div>
+    </div>
+  );
+};
+
+// 高薪vs低薪技术差异组件
+const SalaryTierTechCard = ({ salaryTierTech }) => {
+  if (!salaryTierTech || !salaryTierTech.available) return null;
+
+  const { language, database, webframe, platform } = salaryTierTech;
+
+  const hasMissingItems =
+    language?.missing?.length > 0 ||
+    database?.missing?.length > 0 ||
+    webframe?.missing?.length > 0 ||
+    platform?.missing?.length > 0;
+
+  if (!hasMissingItems) return null;
+
+  const renderMissingItems = (items, category) => {
+    if (!items?.length) return null;
+    return (
+      <div className="advice-salary-tier-category">
+        <div className="advice-salary-tier-category-title">{category}</div>
+        {items.map((item) => (
+          <div className="advice-salary-tier-item" key={item.tech}>
+            <div className="advice-salary-tier-item-head">
+              <span className="advice-salary-tier-tech">{item.tech}</span>
+              <span className="advice-salary-tier-diff">+{fmtPct(item.diff)}</span>
+            </div>
+            <div className="advice-salary-tier-item-detail">
+              高薪 {fmtPct(item.highHave)} vs 低薪 {fmtPct(item.lowHave)}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderHasItems = (items, category) => {
+    if (!items?.length) return null;
+    return (
+      <div className="advice-salary-tier-has">
+        <span className="advice-salary-tier-has-label">{category}已掌握：</span>
+        {items.map((item, idx) => (
+          <span key={item.tech} className="advice-salary-tier-has-tech">
+            {item.tech}
+            {idx < items.length - 1 ? '、' : ''}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
+  const hasUserItems =
+    language?.has?.length > 0 ||
+    database?.has?.length > 0 ||
+    webframe?.has?.length > 0 ||
+    platform?.has?.length > 0;
+
+  return (
+    <div className="advice-viz-card advice-salary-tier-card">
+      <div className="advice-viz-head">
+        <div>
+          <div className="advice-eyebrow">Salary Tier · High vs Low</div>
+          <h3 className="advice-card-title">高薪人群的技术密码</h3>
+          <div className="advice-viz-subtitle">
+            以下技术在 <strong>高薪人群（&gt;P75）</strong> 中的普及率显著高于 <strong>低薪人群（&lt;P25）</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="advice-salary-tier-grid">
+        {renderMissingItems(language?.missing, '语言')}
+        {renderMissingItems(database?.missing, '数据库')}
+        {renderMissingItems(webframe?.missing, '框架')}
+        {renderMissingItems(platform?.missing, '平台/工具')}
+      </div>
+
+      {hasUserItems && (
+        <div className="advice-salary-tier-has-section">
+          <div className="advice-salary-tier-has-title">你已掌握的高薪技术</div>
+          {renderHasItems(language?.has, '语言')}
+          {renderHasItems(database?.has, '数据库')}
+          {renderHasItems(webframe?.has, '框架')}
+          {renderHasItems(platform?.has, '平台/工具')}
+        </div>
+      )}
     </div>
   );
 };
@@ -455,6 +570,7 @@ const AdviceDataView = ({ analysisText, adviceData }) => {
   const salary = adviceData?.salary || null;
   const tech = adviceData?.tech || null;
   const advancement = adviceData?.advancement || null;
+  const salaryTierTech = adviceData?.salaryTierTech || null;
 
   // 如果没有结构化数据，就退回文本
   if (!salary && !tech) {
@@ -474,8 +590,15 @@ const AdviceDataView = ({ analysisText, adviceData }) => {
     <div className="advice-output">
       {salary ? <SalaryPercentileChart salary={salary} /> : null}
 
+      {/* 进阶建议 */}
+      <AdvancementCard advancement={advancement} />
+
+      {/* 高薪vs低薪技术差异 */}
+      <SalaryTierTechCard salaryTierTech={salaryTierTech} />
+
+      {/* 技术栈建议（市场需求信号） */}
       {tech ? (
-        <div className="advice-viz-card">
+        <div className="advice-viz-card advice-tech-card">
           <div className="advice-viz-head">
             <div>
               <div className="advice-eyebrow">Stack · Market Signals</div>
@@ -483,33 +606,35 @@ const AdviceDataView = ({ analysisText, adviceData }) => {
               <div className="advice-viz-subtitle">
                 <strong>Want</strong> 想用占比 · <strong>Have</strong> 在用占比 · <strong>Gap</strong> 需求缺口 = Want - Have
                 <br />
-                对标精准度：语言 {getLevelText(tech.cohort?.levels?.language)} · 数据库 {getLevelText(tech.cohort?.levels?.database)} · 框架 {getLevelText(tech.cohort?.levels?.webframe)}
+                对标精准度：语言 {getLevelText(tech.cohort?.levels?.language)} · 数据库 {getLevelText(tech.cohort?.levels?.database)} · 框架 {getLevelText(tech.cohort?.levels?.webframe)} · 平台 {getLevelText(tech.cohort?.levels?.platform)}
               </div>
             </div>
           </div>
 
-          <div className="advice-tech-grid-compact">
-            <div className="advice-tech-col">
-              <div className="advice-tech-col-title">语言</div>
+          <div className="advice-tech-reco-grid">
+            <div className="advice-tech-reco-col">
+              <div className="advice-tech-reco-col-title">语言</div>
               <TechRecoBars title="主流地基（更稳）" items={tech.language?.mainstream} />
               <TechRecoBars title="潜力加分（更亮）" items={tech.language?.gap} />
             </div>
-            <div className="advice-tech-col">
-              <div className="advice-tech-col-title">数据库</div>
+            <div className="advice-tech-reco-col">
+              <div className="advice-tech-reco-col-title">数据库</div>
               <TechRecoBars title="主流地基（更稳）" items={tech.database?.mainstream} />
               <TechRecoBars title="潜力加分（更亮）" items={tech.database?.gap} />
             </div>
-            <div className="advice-tech-col">
-              <div className="advice-tech-col-title">框架/平台</div>
+            <div className="advice-tech-reco-col">
+              <div className="advice-tech-reco-col-title">框架</div>
               <TechRecoBars title="主流地基（更稳）" items={tech.webframe?.mainstream} />
               <TechRecoBars title="潜力加分（更亮）" items={tech.webframe?.gap} />
+            </div>
+            <div className="advice-tech-reco-col">
+              <div className="advice-tech-reco-col-title">平台/工具</div>
+              <TechRecoBars title="主流地基（更稳）" items={tech.platform?.mainstream} />
+              <TechRecoBars title="潜力加分（更亮）" items={tech.platform?.gap} />
             </div>
           </div>
         </div>
       ) : null}
-
-      {/* 进阶建议 */}
-      <AdvancementCard advancement={advancement} />
 
       <details className="advice-details">
         <summary>查看完整分析文本</summary>
@@ -545,6 +670,7 @@ const PersonalAdvice = () => {
     languages: [],
     webframes: [],
     databases: [],
+    platforms: [],
   });
 
   // 身份与预期信息
@@ -665,15 +791,16 @@ const PersonalAdvice = () => {
     const hasAnyRecos =
       tech.language.mainstream.length > 0 || tech.language.gap.length > 0 ||
       tech.database.mainstream.length > 0 || tech.database.gap.length > 0 ||
-      tech.webframe.mainstream.length > 0 || tech.webframe.gap.length > 0;
+      tech.webframe.mainstream.length > 0 || tech.webframe.gap.length > 0 ||
+      tech.platform?.mainstream?.length > 0 || tech.platform?.gap?.length > 0;
 
     if (!hasAnyRecos) {
       lines.push('');
-      lines.push('- 你已选的栈覆盖度很高，或者同类样本很分散：建议直接对齐目标岗位 JD，补齐 **1 个主栈 + 1 个数据库 + 1 个框架** 的"可讲闭环项目"。');
+      lines.push('- 你已选的栈覆盖度很高，或者同类样本很分散：建议直接对齐目标岗位 JD，补齐 **1 个主栈 + 1 个数据库 + 1 个框架 + 1 个平台/工具** 的"可讲闭环项目"。');
     }
 
     // 已选技术的普及度
-    const hasChosen = tech.language.chosen.length > 0 || tech.database.chosen.length > 0 || tech.webframe.chosen.length > 0;
+    const hasChosen = tech.language.chosen.length > 0 || tech.database.chosen.length > 0 || tech.webframe.chosen.length > 0 || tech.platform?.chosen?.length > 0;
     if (hasChosen) {
       lines.push('');
       lines.push('**你已选技术在同类人群中的普及度（参考）**');
@@ -690,8 +817,14 @@ const PersonalAdvice = () => {
         });
       }
       if (tech.webframe.chosen.length > 0) {
-        lines.push('框架/平台：');
+        lines.push('框架：');
         tech.webframe.chosen.forEach(item => {
+          lines.push(`- ${item.tech}（在该统计口径中 have≈${fmtPct(item.have)}）`);
+        });
+      }
+      if (tech.platform?.chosen?.length > 0) {
+        lines.push('平台/工具：');
+        tech.platform.chosen.forEach(item => {
           lines.push(`- ${item.tech}（在该统计口径中 have≈${fmtPct(item.have)}）`);
         });
       }
@@ -758,10 +891,11 @@ const PersonalAdvice = () => {
   const validateBeforeGenerate = () => {
     const missing = [];
 
-    // 技术栈三块都要有选择
+    // 技术栈四块都要有选择
     if (!techStack.languages?.length) missing.push('语言/基础能力掌握情况');
     if (!techStack.databases?.length) missing.push('数据库掌握情况');
-    if (!techStack.webframes?.length) missing.push('Web/框架/平台掌握情况');
+    if (!techStack.webframes?.length) missing.push('Web/框架掌握情况');
+    if (!techStack.platforms?.length) missing.push('平台/工具/云服务掌握情况');
 
     // 身份必须选
     if (!profileType) {
@@ -958,6 +1092,36 @@ const PersonalAdvice = () => {
                       onChange={() => handleTechToggle('webframes', fw)}
                     />
                     <span>{fw}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 平台/工具 */}
+          <div className="advice-card">
+            <div className="advice-card-header">
+              <div>
+                <div className="advice-eyebrow">Stack · Platform</div>
+                <h3 className="advice-card-title">平台 / 工具 / 云服务</h3>
+              </div>
+              <span className="advice-chip">已选 {techStack.platforms.length} 项</span>
+            </div>
+            <p className="advice-card-subtitle">选择你能独立完成部署、配置或日常使用的平台与工具。</p>
+            <div className="advice-options-grid">
+              {PLATFORM_OPTIONS.map((p) => {
+                const checked = techStack.platforms.includes(p);
+                return (
+                  <label
+                    key={p}
+                    className={`advice-option-pill ${checked ? 'advice-option-pill-active' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => handleTechToggle('platforms', p)}
+                    />
+                    <span>{p}</span>
                   </label>
                 );
               })}

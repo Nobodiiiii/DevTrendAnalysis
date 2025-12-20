@@ -13,6 +13,13 @@ GOLD_BENCH_L4 = "hdfs:///advice/gold/2025/salary_benchmark_lvl4_emp_all"
 GOLD_TREND_LANG = "hdfs:///advice/gold/2025/tech_trends_language"
 GOLD_TREND_DB = "hdfs:///advice/gold/2025/tech_trends_database"
 GOLD_TREND_WEB = "hdfs:///advice/gold/2025/tech_trends_webframe"
+GOLD_TREND_PLATFORM = "hdfs:///advice/gold/2025/tech_trends_platform"
+
+# ✅ tech trends by salary tier (high/mid/low)
+GOLD_TREND_LANG_BY_SALARY = "hdfs:///advice/gold/2025/tech_trends_language_by_salary"
+GOLD_TREND_DB_BY_SALARY = "hdfs:///advice/gold/2025/tech_trends_database_by_salary"
+GOLD_TREND_WEB_BY_SALARY = "hdfs:///advice/gold/2025/tech_trends_webframe_by_salary"
+GOLD_TREND_PLATFORM_BY_SALARY = "hdfs:///advice/gold/2025/tech_trends_platform_by_salary"
 
 spark = SparkSession.builder.appName("advice-build-gold-2025").getOrCreate()
 
@@ -31,6 +38,8 @@ df = raw.select(
     F.col("DatabaseWantToWorkWith").alias("db_want"),
     F.col("WebframeHaveWorkedWith").alias("web_have"),
     F.col("WebframeWantToWorkWith").alias("web_want"),
+    F.col("PlatformHaveWorkedWith").alias("platform_have"),
+    F.col("PlatformWantToWorkWith").alias("platform_want"),
 )
 
 def norm(c):
@@ -196,6 +205,94 @@ def build_trends(df_in, have_col, want_col, out_path, tech_type):
 build_trends(df, "lang_have", "lang_want", GOLD_TREND_LANG, "language")
 build_trends(df, "db_have", "db_want", GOLD_TREND_DB, "database")
 build_trends(df, "web_have", "web_want", GOLD_TREND_WEB, "webframe")
+build_trends(df, "platform_have", "platform_want", GOLD_TREND_PLATFORM, "platform")
+
+
+# ===== Gold: tech trends by salary tier（按薪资分层的技术趋势）
+def build_trends_by_salary_tier(df_in, have_col, want_col, out_path, tech_type):
+    """
+    按薪资分位数分层：
+    - low: <P25
+    - mid: P25-P75
+    - high: >P75
+    按 devtype_family 分组（保留方向维度）
+    """
+    # 只保留有薪资数据的在职人员
+    base = (
+        df_in.where(F.col("salary_yearly").isNotNull())
+            .where(F.col("employment_std").isin("employed", "self_employed"))
+            .where(F.col("workexp_bin") != "unknown")
+            .select(
+                "response_id", "salary_yearly", "devtype_family",
+                F.col(have_col).alias("have_raw"),
+                F.col(want_col).alias("want_raw")
+            )
+    )
+
+    # 计算全局薪资分位数（P25, P75）
+    percentiles = base.select(
+        F.expr("percentile_approx(salary_yearly, 0.25)").alias("p25"),
+        F.expr("percentile_approx(salary_yearly, 0.75)").alias("p75"),
+    ).collect()[0]
+    p25_val = float(percentiles["p25"])
+    p75_val = float(percentiles["p75"])
+
+    # 添加 salary_tier 字段
+    base = base.withColumn(
+        "salary_tier",
+        F.when(F.col("salary_yearly") < p25_val, F.lit("low"))
+         .when(F.col("salary_yearly") > p75_val, F.lit("high"))
+         .otherwise(F.lit("mid"))
+    )
+
+    # 按 devtype_family + salary_tier 分组统计人数
+    cohort_n = base.groupBy("devtype_family", "salary_tier") \
+                   .agg(F.countDistinct("response_id").alias("n"))
+
+    def explode_tokens(colname):
+        return (
+            base.select(
+                "response_id", "devtype_family", "salary_tier",
+                F.explode(F.split(F.coalesce(F.col(colname), F.lit("")), ";")).alias("tech")
+            )
+            .withColumn("tech", F.trim(F.col("tech")))
+            .where(F.col("tech") != "")
+            .dropDuplicates(["response_id", "devtype_family", "salary_tier", "tech"])
+        )
+
+    have = explode_tokens("have_raw")
+    want = explode_tokens("want_raw")
+
+    have_cnt = have.groupBy("devtype_family", "salary_tier", "tech") \
+                   .agg(F.countDistinct("response_id").alias("have_cnt"))
+    want_cnt = want.groupBy("devtype_family", "salary_tier", "tech") \
+                   .agg(F.countDistinct("response_id").alias("want_cnt"))
+
+    hv = (
+        have_cnt.join(want_cnt, ["devtype_family", "salary_tier", "tech"], "full")
+                .withColumn("have_cnt", F.coalesce(F.col("have_cnt"), F.lit(0)))
+                .withColumn("want_cnt", F.coalesce(F.col("want_cnt"), F.lit(0)))
+    )
+
+    trend = (
+        hv.join(cohort_n, ["devtype_family", "salary_tier"], "left")
+          .withColumn("have_rate", F.col("have_cnt") / F.col("n"))
+          .withColumn("want_rate", F.col("want_cnt") / F.col("n"))
+          .withColumn("gap", F.col("want_rate") - F.col("have_rate"))
+          .withColumn("tech_type", F.lit(tech_type))
+          .withColumn("p25_threshold", F.lit(p25_val))
+          .withColumn("p75_threshold", F.lit(p75_val))
+          .select("tech_type", "devtype_family", "salary_tier", "tech", "n",
+                  "have_rate", "want_rate", "gap", "p25_threshold", "p75_threshold")
+    )
+
+    trend.write.mode("overwrite").parquet(out_path)
+
+
+build_trends_by_salary_tier(df, "lang_have", "lang_want", GOLD_TREND_LANG_BY_SALARY, "language")
+build_trends_by_salary_tier(df, "db_have", "db_want", GOLD_TREND_DB_BY_SALARY, "database")
+build_trends_by_salary_tier(df, "web_have", "web_want", GOLD_TREND_WEB_BY_SALARY, "webframe")
+build_trends_by_salary_tier(df, "platform_have", "platform_want", GOLD_TREND_PLATFORM_BY_SALARY, "platform")
 
 print("DONE:")
 print("  SILVER_CLEAN =", SILVER_CLEAN)
@@ -206,5 +303,10 @@ print("  GOLD_BENCH_L4 =", GOLD_BENCH_L4)
 print("  GOLD_TREND_LANG =", GOLD_TREND_LANG)
 print("  GOLD_TREND_DB   =", GOLD_TREND_DB)
 print("  GOLD_TREND_WEB  =", GOLD_TREND_WEB)
+print("  GOLD_TREND_PLATFORM =", GOLD_TREND_PLATFORM)
+print("  GOLD_TREND_LANG_BY_SALARY =", GOLD_TREND_LANG_BY_SALARY)
+print("  GOLD_TREND_DB_BY_SALARY   =", GOLD_TREND_DB_BY_SALARY)
+print("  GOLD_TREND_WEB_BY_SALARY  =", GOLD_TREND_WEB_BY_SALARY)
+print("  GOLD_TREND_PLATFORM_BY_SALARY =", GOLD_TREND_PLATFORM_BY_SALARY)
 
 spark.stop()

@@ -20,6 +20,13 @@ GOLD_BENCH_L4 = "hdfs://localhost:9000/advice/gold/2025/salary_benchmark_lvl4_em
 GOLD_TREND_LANG = "hdfs://localhost:9000/advice/gold/2025/tech_trends_language"
 GOLD_TREND_DB = "hdfs://localhost:9000/advice/gold/2025/tech_trends_database"
 GOLD_TREND_WEB = "hdfs://localhost:9000/advice/gold/2025/tech_trends_webframe"
+GOLD_TREND_PLATFORM = "hdfs://localhost:9000/advice/gold/2025/tech_trends_platform"
+
+# ✅ tech trends by salary tier (high/mid/low)
+GOLD_TREND_LANG_BY_SALARY = "hdfs://localhost:9000/advice/gold/2025/tech_trends_language_by_salary"
+GOLD_TREND_DB_BY_SALARY = "hdfs://localhost:9000/advice/gold/2025/tech_trends_database_by_salary"
+GOLD_TREND_WEB_BY_SALARY = "hdfs://localhost:9000/advice/gold/2025/tech_trends_webframe_by_salary"
+GOLD_TREND_PLATFORM_BY_SALARY = "hdfs://localhost:9000/advice/gold/2025/tech_trends_platform_by_salary"
 
 # =========================
 # Global knobs
@@ -32,11 +39,12 @@ FX_LABEL = f"1 USD ≈ {FX_USD_TO_CNY} CNY"
 # ✅ 回退阈值：低于该 n 自动回退到更粗粒度（薪资 & 栈建议共用）
 MIN_N = 200
 
-# ✅ “绝对需求门槛”——防止小众项被 gap 顶上来
-# 你可以后面调参：想更“稳”就提高，想更“探索”就降低
+# ✅ "绝对需求门槛"——防止小众项被 gap 顶上来
+# 你可以后面调参：想更"稳"就提高，想更"探索"就降低
 LANG_MIN_WANT = 0.08  # 语言：至少 8% 想用
 WEB_MIN_WANT = 0.08  # 框架：至少 8% 想用
 DB_MIN_WANT = 0.05  # 数据库：至少 5% 想用
+PLATFORM_MIN_WANT = 0.08  # 平台/工具：至少 8% 想用
 
 # “如果门槛下没有可推荐项”，自动降档的梯度（不至于空）
 RELAX_FACTORS = [1.0, 0.6, 0.3, 0.0]
@@ -68,8 +76,12 @@ WORKEXP_ADVANCEMENT = {
 }
 
 # ✅ 进阶推荐阈值
-ADV_MIN_LIFT = 0.05  # 进阶人群 have_rate 至少比当前高 5%
-ADV_MIN_TARGET_HAVE = 0.10  # 进阶人群 have_rate 至少 10%
+ADV_MIN_LIFT = 0.03  # 进阶人群 have_rate 至少比当前高 3%
+ADV_MIN_TARGET_HAVE = 0.08  # 进阶人群 have_rate 至少 8%
+
+# ✅ 高薪技术差异推荐阈值
+SALARY_TIER_MIN_DIFF = 0.03  # 高薪人群 have_rate 比低薪人群至少高 3%
+SALARY_TIER_MIN_HIGH_HAVE = 0.10  # 高薪人群 have_rate 至少 10%
 
 # =========================
 # Spark cache
@@ -86,12 +98,27 @@ _bench_l4: Optional[DataFrame] = None
 _lang_trend_df: Optional[DataFrame] = None
 _db_trend_df: Optional[DataFrame] = None
 _web_trend_df: Optional[DataFrame] = None
+_platform_trend_df: Optional[DataFrame] = None
+
+# ✅ 按薪资分层的技术趋势表缓存
+_lang_salary_tier_df: Optional[DataFrame] = None
+_db_salary_tier_df: Optional[DataFrame] = None
+_web_salary_tier_df: Optional[DataFrame] = None
+_platform_salary_tier_df: Optional[DataFrame] = None
 
 
 def _ensure_tables() -> Tuple[
-    SparkSession, DataFrame, DataFrame, DataFrame, DataFrame, DataFrame, DataFrame, DataFrame]:
+    SparkSession, DataFrame, DataFrame, DataFrame, DataFrame, DataFrame, DataFrame, DataFrame, DataFrame,
+    DataFrame, DataFrame, DataFrame, DataFrame]:
+    """
+    返回：
+    spark, bench_l1, bench_l2, bench_l3, bench_l4,
+    lang_df, db_df, web_df, platform_df,
+    lang_salary_tier_df, db_salary_tier_df, web_salary_tier_df, platform_salary_tier_df
+    """
     global _spark, _bench_l1, _bench_l2, _bench_l3, _bench_l4
-    global _lang_trend_df, _db_trend_df, _web_trend_df
+    global _lang_trend_df, _db_trend_df, _web_trend_df, _platform_trend_df
+    global _lang_salary_tier_df, _db_salary_tier_df, _web_salary_tier_df, _platform_salary_tier_df
 
     with _lock:
         if _spark is None:
@@ -112,8 +139,34 @@ def _ensure_tables() -> Tuple[
             _db_trend_df = _spark.read.parquet(GOLD_TREND_DB).cache()
         if _web_trend_df is None:
             _web_trend_df = _spark.read.parquet(GOLD_TREND_WEB).cache()
+        if _platform_trend_df is None:
+            _platform_trend_df = _spark.read.parquet(GOLD_TREND_PLATFORM).cache()
 
-    return _spark, _bench_l1, _bench_l2, _bench_l3, _bench_l4, _lang_trend_df, _db_trend_df, _web_trend_df
+        # ✅ 按薪资分层的技术趋势表
+        if _lang_salary_tier_df is None:
+            try:
+                _lang_salary_tier_df = _spark.read.parquet(GOLD_TREND_LANG_BY_SALARY).cache()
+            except Exception:
+                _lang_salary_tier_df = None
+        if _db_salary_tier_df is None:
+            try:
+                _db_salary_tier_df = _spark.read.parquet(GOLD_TREND_DB_BY_SALARY).cache()
+            except Exception:
+                _db_salary_tier_df = None
+        if _web_salary_tier_df is None:
+            try:
+                _web_salary_tier_df = _spark.read.parquet(GOLD_TREND_WEB_BY_SALARY).cache()
+            except Exception:
+                _web_salary_tier_df = None
+        if _platform_salary_tier_df is None:
+            try:
+                _platform_salary_tier_df = _spark.read.parquet(GOLD_TREND_PLATFORM_BY_SALARY).cache()
+            except Exception:
+                _platform_salary_tier_df = None
+
+    return (_spark, _bench_l1, _bench_l2, _bench_l3, _bench_l4,
+            _lang_trend_df, _db_trend_df, _web_trend_df, _platform_trend_df,
+            _lang_salary_tier_df, _db_salary_tier_df, _web_salary_tier_df, _platform_salary_tier_df)
 
 
 # =========================
@@ -427,12 +480,14 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
     生成职业建议数据（纯数据返回，不生成文本）
     前端将使用返回的结构化数据生成用户友好的文本
     """
-    _, bench_l1, bench_l2, bench_l3, bench_l4, lang_df, db_df, web_df = _ensure_tables()
+    (_, bench_l1, bench_l2, bench_l3, bench_l4, lang_df, db_df, web_df, platform_df,
+     lang_salary_tier_df, db_salary_tier_df, web_salary_tier_df, platform_salary_tier_df) = _ensure_tables()
 
     tech = payload.get("techStack", {}) or {}
     sel_lang = tech.get("languages", []) or []
     sel_db = tech.get("databases", []) or []
     sel_web = tech.get("webframes", []) or []
+    sel_platform = tech.get("platforms", []) or []
 
     profile_type = payload.get("profileType", "")
 
@@ -496,10 +551,12 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
     sel_lang_set = set([s.strip() for s in sel_lang if str(s).strip()])
     sel_db_set = set([s.strip() for s in sel_db if str(s).strip()])
     sel_web_set = set([s.strip() for s in sel_web if str(s).strip()])
+    sel_platform_set = set([s.strip() for s in sel_platform if str(s).strip()])
 
     lang_cohort, lang_lvl, lang_n = _trend_build_cohort_with_fallback(lang_df, wb, fam, min_n=MIN_N)
     db_cohort, db_lvl, db_n = _trend_build_cohort_with_fallback(db_df, wb, fam, min_n=MIN_N)
     web_cohort, web_lvl, web_n = _trend_build_cohort_with_fallback(web_df, wb, fam, min_n=MIN_N)
+    platform_cohort, platform_lvl, platform_n = _trend_build_cohort_with_fallback(platform_df, wb, fam, min_n=MIN_N)
 
     # ===== 辅助函数：将文本行解析为结构化数据
     def _parse_reco_line(line: str) -> Optional[Dict[str, Any]]:
@@ -547,9 +604,18 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
         web_cohort, sel_web_set, 3, base_min_want_rate=WEB_MIN_WANT, mode="gap"
     )
 
+    # platform
+    platform_main_lines, platform_main_thr = _trend_pick_recos(
+        platform_cohort, sel_platform_set, 3, base_min_want_rate=PLATFORM_MIN_WANT, mode="mainstream"
+    )
+    platform_gap_lines, platform_gap_thr = _trend_pick_recos(
+        platform_cohort, sel_platform_set, 3, base_min_want_rate=PLATFORM_MIN_WANT, mode="gap"
+    )
+
     chosen_lang_lines = _trend_pick_chosen_popularity(lang_cohort, sel_lang_set, limit_n=3)
     chosen_db_lines = _trend_pick_chosen_popularity(db_cohort, sel_db_set, limit_n=3)
     chosen_web_lines = _trend_pick_chosen_popularity(web_cohort, sel_web_set, limit_n=3)
+    chosen_platform_lines = _trend_pick_chosen_popularity(platform_cohort, sel_platform_set, limit_n=3)
 
     # 解析为结构化数据
     lang_main_items = [x for x in (_parse_reco_line(l) for l in (lang_main_lines or [])) if x]
@@ -564,6 +630,10 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
     web_gap_items = [x for x in (_parse_reco_line(l) for l in (web_gap_lines or [])) if x]
     chosen_web_items = [x for x in (_parse_have_line(l) for l in (chosen_web_lines or [])) if x]
 
+    platform_main_items = [x for x in (_parse_reco_line(l) for l in (platform_main_lines or [])) if x]
+    platform_gap_items = [x for x in (_parse_reco_line(l) for l in (platform_gap_lines or [])) if x]
+    chosen_platform_items = [x for x in (_parse_have_line(l) for l in (chosen_platform_lines or [])) if x]
+
     # 构建技术栈数据结构
     tech_data = {
         "cohort": {
@@ -572,12 +642,14 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
             "levels": {
                 "language": lang_lvl,
                 "database": db_lvl,
-                "webframe": web_lvl
+                "webframe": web_lvl,
+                "platform": platform_lvl
             },
             "nUsed": {
                 "language": int(lang_n),
                 "database": int(db_n),
-                "webframe": int(web_n)
+                "webframe": int(web_n),
+                "platform": int(platform_n)
             },
         },
         "thresholds": {
@@ -596,6 +668,11 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "mainstreamUsedThr": web_main_thr,
                 "gapUsedThr": web_gap_thr,
             },
+            "platform": {
+                "baseMinWant": PLATFORM_MIN_WANT,
+                "mainstreamUsedThr": platform_main_thr,
+                "gapUsedThr": platform_gap_thr,
+            },
         },
         "language": {
             "mainstream": lang_main_items,
@@ -611,6 +688,11 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
             "mainstream": web_main_items,
             "gap": web_gap_items,
             "chosen": chosen_web_items,
+        },
+        "platform": {
+            "mainstream": platform_main_items,
+            "gap": platform_gap_items,
+            "chosen": chosen_platform_items,
         },
     }
 
@@ -628,6 +710,9 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
         )
         adv_web_cohort, adv_web_lvl, adv_web_n = _trend_build_cohort_with_fallback(
             web_df, target_wb, fam, min_n=MIN_N
+        )
+        adv_platform_cohort, adv_platform_lvl, adv_platform_n = _trend_build_cohort_with_fallback(
+            platform_df, target_wb, fam, min_n=MIN_N
         )
 
         def _compute_advancement_items(
@@ -675,9 +760,10 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
         adv_lang_items = _compute_advancement_items(lang_cohort, adv_lang_cohort, sel_lang_set, top_k=2)
         adv_db_items = _compute_advancement_items(db_cohort, adv_db_cohort, sel_db_set, top_k=2)
         adv_web_items = _compute_advancement_items(web_cohort, adv_web_cohort, sel_web_set, top_k=2)
+        adv_platform_items = _compute_advancement_items(platform_cohort, adv_platform_cohort, sel_platform_set, top_k=2)
 
         # 只有当有推荐项时才返回进阶数据
-        has_any_advancement = bool(adv_lang_items or adv_db_items or adv_web_items)
+        has_any_advancement = bool(adv_lang_items or adv_db_items or adv_web_items or adv_platform_items)
 
         advancement_data = {
             "currentLevel": wb,
@@ -686,6 +772,126 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
             "language": adv_lang_items,
             "database": adv_db_items,
             "webframe": adv_web_items,
+            "platform": adv_platform_items,
+        }
+
+    # ===== 高薪vs低薪技术差异分析
+    salary_tier_tech_data: Optional[Dict[str, Any]] = None
+
+    def _compute_salary_tier_diff(
+        tier_df: Optional[DataFrame],
+        fam: str,
+        selected_set: set,
+        top_k: int = 3,
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """
+        计算高薪人群vs低薪人群的技术差异
+        返回：(推荐技术列表, 元信息)
+        """
+        if tier_df is None:
+            return [], {"available": False, "reason": "数据表未加载"}
+
+        # 按 devtype_family 筛选
+        filtered = tier_df.where(F.col("devtype_family") == fam)
+
+        # 获取高薪人群和低薪人群的技术数据
+        high_rows = filtered.where(F.col("salary_tier") == "high").select("tech", "have_rate", "n").collect()
+        low_rows = filtered.where(F.col("salary_tier") == "low").select("tech", "have_rate", "n").collect()
+
+        if not high_rows or not low_rows:
+            # 尝试回退到全局数据
+            filtered = tier_df
+            high_rows = filtered.where(F.col("salary_tier") == "high").select("tech", "have_rate", "n").collect()
+            low_rows = filtered.where(F.col("salary_tier") == "low").select("tech", "have_rate", "n").collect()
+
+            if not high_rows or not low_rows:
+                return [], {"available": False, "reason": "高薪或低薪人群数据不足"}
+
+        high_map = {r["tech"]: float(r["have_rate"]) for r in high_rows}
+        low_map = {r["tech"]: float(r["have_rate"]) for r in low_rows}
+
+        # 获取样本量信息
+        high_n = int(high_rows[0]["n"]) if high_rows else 0
+        low_n = int(low_rows[0]["n"]) if low_rows else 0
+
+        # 计算差异：高薪人群 have_rate 比低薪人群高的技术
+        candidates = []
+        for tech, high_have in high_map.items():
+            low_have = low_map.get(tech, 0.0)
+            diff = high_have - low_have
+
+            # 筛选条件：
+            # 1. 高薪人群 have_rate 达到门槛
+            # 2. 差异达到门槛
+            # 3. 用户未选择该技术
+            if high_have >= SALARY_TIER_MIN_HIGH_HAVE and diff >= SALARY_TIER_MIN_DIFF:
+                candidates.append({
+                    "tech": tech,
+                    "highHave": high_have,
+                    "lowHave": low_have,
+                    "diff": diff,
+                    "userHas": tech in selected_set,
+                })
+
+        # 按差异降序排序
+        candidates.sort(key=lambda x: x["diff"], reverse=True)
+
+        # 分离用户已有和未有的技术
+        user_missing = [c for c in candidates if not c["userHas"]][:top_k]
+        user_has = [c for c in candidates if c["userHas"]][:top_k]
+
+        meta = {
+            "available": True,
+            "highN": high_n,
+            "lowN": low_n,
+            "devtypeFamily": fam,
+        }
+
+        return user_missing, user_has, meta
+
+    # 只有当薪资分层表存在时才计算
+    if lang_salary_tier_df is not None or db_salary_tier_df is not None or web_salary_tier_df is not None or platform_salary_tier_df is not None:
+        lang_missing, lang_has, lang_meta = _compute_salary_tier_diff(
+            lang_salary_tier_df, fam, sel_lang_set, top_k=3
+        ) if lang_salary_tier_df is not None else ([], [], {"available": False})
+
+        db_missing, db_has, db_meta = _compute_salary_tier_diff(
+            db_salary_tier_df, fam, sel_db_set, top_k=3
+        ) if db_salary_tier_df is not None else ([], [], {"available": False})
+
+        web_missing, web_has, web_meta = _compute_salary_tier_diff(
+            web_salary_tier_df, fam, sel_web_set, top_k=3
+        ) if web_salary_tier_df is not None else ([], [], {"available": False})
+
+        platform_missing, platform_has, platform_meta = _compute_salary_tier_diff(
+            platform_salary_tier_df, fam, sel_platform_set, top_k=3
+        ) if platform_salary_tier_df is not None else ([], [], {"available": False})
+
+        has_any_diff = bool(lang_missing or db_missing or web_missing or platform_missing)
+
+        salary_tier_tech_data = {
+            "available": has_any_diff,
+            "devtypeFamily": fam,
+            "language": {
+                "missing": lang_missing,
+                "has": lang_has,
+                "meta": lang_meta,
+            },
+            "database": {
+                "missing": db_missing,
+                "has": db_has,
+                "meta": db_meta,
+            },
+            "webframe": {
+                "missing": web_missing,
+                "has": web_has,
+                "meta": web_meta,
+            },
+            "platform": {
+                "missing": platform_missing,
+                "has": platform_has,
+                "meta": platform_meta,
+            },
         }
 
     # 返回纯数据结构
@@ -699,4 +905,5 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
         "salary": salary_data,
         "tech": tech_data,
         "advancement": advancement_data,
+        "salaryTierTech": salary_tier_tech_data,
     }

@@ -621,7 +621,7 @@
 
 /* 用户薪资区间背景高亮 */
 .advice-salary-user-range {
-  fill: rgba(255, 149, 0, 0.15);
+  fill: rgba(59, 130, 246, 0.15);
 }
 
 .advice-salary-dot {
@@ -709,16 +709,16 @@
 
 .advice-tech-bar {
   display: grid;
-  grid-template-columns: 46px 1fr;
+  grid-template-columns: 18px 1fr 36px;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .advice-tech-bar-label {
-  font-size: 0.74rem;
+  font-size: 0.7rem;
   color: var(--text-soft);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 
 .advice-tech-bar-track {
@@ -732,11 +732,31 @@
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: rgba(17, 17, 17, 0.72);
+  background: rgba(17, 17, 17, 0.85);
+  min-width: 2px;
 }
 
 .advice-tech-bar-fill-muted {
-  background: rgba(17, 17, 17, 0.38);
+  background: rgba(17, 17, 17, 0.45);
+}
+
+.advice-tech-bar-value-out {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.advice-tech-gap {
+  font-size: 0.78rem;
+  color: rgb(59, 120, 246);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.advice-tech-gap-positive {
+  font-weight: 600;
 }
 
 /* “完整文本”折叠 */
@@ -812,10 +832,10 @@
   margin-top: 2px;
 }
 
-/* 宽屏：技术栈 3 列更舒服 */
+/* 宽屏：技术栈 4 列更舒服 */
 @media (min-width: 980px) {
   .advice-tech-grid-compact {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
   .advice-tech-bars {
     grid-template-columns: 1fr 1fr;
@@ -824,12 +844,12 @@
 }
 
 /* =========================
-   进阶建议卡片样式
+   进阶建议卡片样式（冷色调）
    ========================= */
 
 .advice-adv-card {
-  background: linear-gradient(135deg, rgba(255, 149, 0, 0.06) 0%, rgba(255, 255, 255, 0.98) 50%);
-  border-color: rgba(255, 149, 0, 0.15);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.06) 0%, rgba(255, 255, 255, 0.98) 50%);
+  border-color: rgba(59, 130, 246, 0.15);
 }
 
 .advice-adv-grid {
@@ -841,7 +861,7 @@
 
 @media (min-width: 640px) {
   .advice-adv-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -862,8 +882,8 @@
 .advice-adv-item {
   padding: 8px 10px;
   border-radius: 10px;
-  background: rgba(255, 149, 0, 0.06);
-  border: 1px solid rgba(255, 149, 0, 0.12);
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.12);
   margin-bottom: 6px;
 }
 
@@ -887,13 +907,222 @@
 .advice-adv-lift {
   font-size: 0.82rem;
   font-weight: 600;
-  color: rgba(255, 149, 0, 1);
-  background: rgba(255, 149, 0, 0.12);
+  color: rgba(59, 130, 246, 1);
+  background: rgba(59, 130, 246, 0.12);
   padding: 2px 8px;
   border-radius: 999px;
 }
 
 .advice-adv-item-detail {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+  margin-top: 4px;
+}
+
+/* =========================
+   高薪vs低薪技术差异卡片样式（冷色调-深蓝）
+   ========================= */
+
+.advice-salary-tier-card {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.06) 0%, rgba(255, 255, 255, 0.98) 50%);
+  border-color: rgba(37, 99, 235, 0.15);
+}
+
+.advice-salary-tier-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+@media (min-width: 640px) {
+  .advice-salary-tier-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.advice-salary-tier-category {
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.advice-salary-tier-category-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.advice-salary-tier-item {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(37, 99, 235, 0.06);
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  margin-bottom: 6px;
+}
+
+.advice-salary-tier-item:last-child {
+  margin-bottom: 0;
+}
+
+.advice-salary-tier-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.advice-salary-tier-tech {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.advice-salary-tier-diff {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(37, 99, 235, 1);
+  background: rgba(37, 99, 235, 0.12);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.advice-salary-tier-item-detail {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+  margin-top: 4px;
+}
+
+/* 已掌握的高薪技术区域 */
+.advice-salary-tier-has-section {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(37, 99, 235, 0.04);
+  border: 1px solid rgba(37, 99, 235, 0.08);
+}
+
+.advice-salary-tier-has-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(37, 99, 235, 1);
+  margin-bottom: 8px;
+}
+
+.advice-salary-tier-has {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.advice-salary-tier-has:last-child {
+  margin-bottom: 0;
+}
+
+.advice-salary-tier-has-label {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+}
+
+.advice-salary-tier-has-tech {
+  font-size: 0.78rem;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* =========================
+   技术栈建议卡片样式（蓝色渐变）
+   ========================= */
+
+.advice-tech-card {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.06) 0%, rgba(255, 255, 255, 0.98) 50%);
+  border-color: rgba(99, 102, 241, 0.15);
+}
+
+/* =========================
+   技术栈建议卡片内部样式（和上面两个模块一致）
+   ========================= */
+
+.advice-tech-reco-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+@media (min-width: 640px) {
+  .advice-tech-reco-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.advice-tech-reco-col {
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.advice-tech-reco-col-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.advice-tech-reco-category {
+  margin-bottom: 10px;
+}
+
+.advice-tech-reco-category:last-child {
+  margin-bottom: 0;
+}
+
+.advice-tech-reco-category-title {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+  margin-bottom: 6px;
+}
+
+.advice-tech-reco-item {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid rgba(99, 102, 241, 0.12);
+  margin-bottom: 6px;
+}
+
+.advice-tech-reco-item:last-child {
+  margin-bottom: 0;
+}
+
+.advice-tech-reco-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.advice-tech-reco-tech {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.advice-tech-reco-gap {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(99, 102, 241, 1);
+  background: rgba(99, 102, 241, 0.12);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.advice-tech-reco-item-detail {
   font-size: 0.78rem;
   color: var(--text-soft);
   margin-top: 4px;
