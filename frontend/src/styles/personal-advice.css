@@ -1127,3 +1127,153 @@
   color: var(--text-soft);
   margin-top: 4px;
 }
+
+/* ========================================
+   算法指标展示样式
+   ======================================== */
+
+.advice-metrics {
+  margin-bottom: 24px;
+  padding: 16px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+}
+
+.advice-metrics-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin: 0 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.advice-metrics-section {
+  margin-bottom: 16px;
+}
+
+.advice-metrics-section:last-of-type {
+  margin-bottom: 12px;
+}
+
+.advice-metrics-section-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.advice-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.advice-metrics-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.advice-metrics-label {
+  font-size: 0.72rem;
+  color: var(--text-soft);
+}
+
+.advice-metrics-value {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.advice-metrics-table {
+  overflow-x: auto;
+}
+
+.advice-metrics-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.advice-metrics-table th,
+.advice-metrics-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.advice-metrics-table th {
+  background: rgba(99, 102, 241, 0.08);
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.advice-metrics-table td {
+  background: white;
+  color: var(--text-soft);
+}
+
+.advice-metrics-table tr:hover td {
+  background: rgba(99, 102, 241, 0.04);
+}
+
+.advice-metrics-footer {
+  font-size: 0.72rem;
+  color: var(--text-soft);
+  text-align: right;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* Gold 元数据展示 */
+.advice-gold-metadata {
+  margin-top: 20px;
+  margin-bottom: 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(250, 245, 235, 0.8), rgba(255, 250, 240, 0.6));
+  border-radius: 10px;
+  border: 1px solid rgba(200, 180, 140, 0.3);
+}
+
+.advice-metrics-subsection {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.08);
+}
+
+.advice-metrics-subsection-title {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-soft);
+  margin-bottom: 8px;
+}
+
+.advice-gold-top-techs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.advice-gold-tech-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: 12px;
+  font-size: 0.78rem;
+  color: var(--accent);
+}
+
+.advice-gold-tech-tag small {
+  font-size: 0.68rem;
+  color: rgba(16, 185, 129, 0.9);
+  font-weight: 500;
+}

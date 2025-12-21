@@ -159,6 +159,47 @@ const SALARY_BAND_OPTIONS = [
   '> 80 万 / 年',
 ];
 
+// ✅ 统一的层级描述映射
+const LEVEL_INFO = {
+  // 薪资基准层级 (L系列)
+  L1: { precision: '精准', dimension: '就业状态+经验+方向' },
+  L2: { precision: '较精准', dimension: '就业状态+经验' },
+  L3: { precision: '宽泛', dimension: '就业状态+方向' },
+  L4: { precision: '粗略', dimension: '仅就业状态' },
+  // 技术趋势层级 (T系列)
+  T1: { precision: '精准', dimension: '经验+方向' },
+  T2: { precision: '较精准', dimension: '仅经验' },
+  T3: { precision: '宽泛', dimension: '仅方向' },
+  T4: { precision: '粗略', dimension: '全局' },
+};
+
+// 从层级字符串中提取层级代码 (如 "L1(emp+workexp+devtype)" -> "L1")
+const extractLevelCode = (levelStr) => {
+  if (!levelStr) return null;
+  const match = String(levelStr).match(/^([LT]\d)/);
+  return match ? match[1] : null;
+};
+
+// 获取层级的精准度描述
+const getLevelPrecision = (levelStr) => {
+  const code = extractLevelCode(levelStr);
+  return LEVEL_INFO[code]?.precision || '未知';
+};
+
+// 获取层级的维度描述
+const getLevelDimension = (levelStr) => {
+  const code = extractLevelCode(levelStr);
+  return LEVEL_INFO[code]?.dimension || '-';
+};
+
+// 获取完整的层级描述 (精准度 + 维度)
+const getLevelFullText = (levelStr) => {
+  const code = extractLevelCode(levelStr);
+  const info = LEVEL_INFO[code];
+  if (!info) return '未知';
+  return `${info.precision}（${info.dimension}）`;
+};
+
 const CAREER_TRACK_OPTIONS = [
   '前端开发',
   '后端开发',
@@ -287,23 +328,14 @@ const SalaryPercentileChart = ({ salary }) => {
   const H = 70;
   const y = 34;
 
-  // 映射口径到友好文字
-  const getLevelText = (level) => {
-    if (level.includes('L1')) return '精准对标';
-    if (level.includes('L2')) return '较精准';
-    if (level.includes('L3')) return '宽泛对标';
-    if (level.includes('L4')) return '粗略对标';
-    return '口径未知';
-  };
-
   return (
     <div className="advice-viz-card">
       <div className="advice-viz-head">
         <div>
-          <div className="advice-eyebrow">Salary · Percentiles</div>
-          <h3 className="advice-card-title">薪资分布（同类人群参考）</h3>
+          <div className="advice-eyebrow">Salary · Benchmark</div>
+          <h3 className="advice-card-title">薪资基准 · 你在同类人群中的位置</h3>
           <div className="advice-viz-subtitle">
-            可信度 {salary.confidence} · {getLevelText(salary.level)} · {salary.fx}
+            对标精度：{getLevelFullText(salary.level)} · 可信度 {salary.confidence} · {salary.fx}
             <br />
             P 表示百分位数：P50 意为有 50% 的人薪资低于此值，P75 则表示超过 75% 的人。
           </div>
@@ -461,8 +493,8 @@ const AdvancementCard = ({ advancement }) => {
     <div className="advice-viz-card advice-adv-card">
       <div className="advice-viz-head">
         <div>
-          <div className="advice-eyebrow">Advancement · Career Path</div>
-          <h3 className="advice-card-title">想提薪？这些技术值得学</h3>
+          <div className="advice-eyebrow">Career · Advancement</div>
+          <h3 className="advice-card-title">经验进阶 · 下一阶段的技术画像</h3>
           <div className="advice-viz-subtitle">
             从 <strong>{currentLevel} 年</strong> 进阶到 <strong>{targetLevel} 年</strong>，这些技术在进阶人群中更普及
           </div>
@@ -538,8 +570,8 @@ const SalaryTierTechCard = ({ salaryTierTech }) => {
     <div className="advice-viz-card advice-salary-tier-card">
       <div className="advice-viz-head">
         <div>
-          <div className="advice-eyebrow">Salary Tier · High vs Low</div>
-          <h3 className="advice-card-title">高薪人群的技术密码</h3>
+          <div className="advice-eyebrow">Salary · Tech Gap</div>
+          <h3 className="advice-card-title">薪资进阶 · 高薪人群的技术特征</h3>
           <div className="advice-viz-subtitle">
             以下技术在 <strong>高薪人群（&gt;P75）</strong> 中的普及率显著高于 <strong>低薪人群（&lt;P25）</strong>
           </div>
@@ -566,6 +598,331 @@ const SalaryTierTechCard = ({ salaryTierTech }) => {
   );
 };
 
+// 指标展示组件
+const MetricsDisplay = ({ metrics }) => {
+  if (!metrics) return null;
+
+  const formatPct = (v) => {
+    if (v === null || v === undefined || Number.isNaN(Number(v))) return '-';
+    return `${(Number(v) * 100).toFixed(1)}%`;
+  };
+
+  return (
+    <div className="advice-metrics">
+      <h4 className="advice-metrics-title">本次推荐指标</h4>
+
+      {/* 薪资基准指标 */}
+      <div className="advice-metrics-section">
+        <div className="advice-metrics-section-title">薪资基准</div>
+        <div className="advice-metrics-grid">
+          <div className="advice-metrics-item">
+            <span className="advice-metrics-label">对标层级</span>
+            <span className="advice-metrics-value">{getLevelFullText(metrics.salaryBenchmark?.level)}</span>
+          </div>
+          <div className="advice-metrics-item">
+            <span className="advice-metrics-label">样本量</span>
+            <span className="advice-metrics-value">{metrics.salaryBenchmark?.sampleSize?.toLocaleString() || '-'}</span>
+          </div>
+          <div className="advice-metrics-item">
+            <span className="advice-metrics-label">可信度</span>
+            <span className="advice-metrics-value">{metrics.salaryBenchmark?.confidence || '-'}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 技术趋势对标指标 */}
+      <div className="advice-metrics-section">
+        <div className="advice-metrics-section-title">技术趋势对标</div>
+        <div className="advice-metrics-grid">
+          <div className="advice-metrics-item">
+            <span className="advice-metrics-label">语言</span>
+            <span className="advice-metrics-value">{getLevelFullText(metrics.trendCohort?.language?.level)}</span>
+          </div>
+          <div className="advice-metrics-item">
+            <span className="advice-metrics-label">数据库</span>
+            <span className="advice-metrics-value">{getLevelFullText(metrics.trendCohort?.database?.level)}</span>
+          </div>
+          <div className="advice-metrics-item">
+            <span className="advice-metrics-label">框架</span>
+            <span className="advice-metrics-value">{getLevelFullText(metrics.trendCohort?.webframe?.level)}</span>
+          </div>
+          <div className="advice-metrics-item">
+            <span className="advice-metrics-label">平台</span>
+            <span className="advice-metrics-value">{getLevelFullText(metrics.trendCohort?.platform?.level)}</span>
+          </div>
+          <div className="advice-metrics-item">
+            <span className="advice-metrics-label">样本量</span>
+            <span className="advice-metrics-value">{metrics.trendCohort?.language?.sampleSize?.toLocaleString() || '-'}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 推荐系统指标 */}
+      <div className="advice-metrics-section">
+        <div className="advice-metrics-section-title">推荐系统指标</div>
+        <div className="advice-metrics-table">
+          <table>
+            <thead>
+              <tr>
+                <th>维度</th>
+                <th>模式</th>
+                <th>候选池</th>
+                <th>推荐数</th>
+                <th>阈值放宽次数</th>
+                <th>最终阈值</th>
+              </tr>
+            </thead>
+            <tbody>
+              {['language', 'database', 'webframe', 'platform'].map((dim) => (
+                <React.Fragment key={dim}>
+                  <tr>
+                    <td rowSpan="2">{dim === 'language' ? '语言' : dim === 'database' ? '数据库' : dim === 'webframe' ? '框架' : '平台'}</td>
+                    <td>主流</td>
+                    <td>{metrics.recommendation?.[dim]?.mainstream?.candidate_pool_size || '-'}</td>
+                    <td>{metrics.recommendation?.[dim]?.mainstream?.final_reco_count || '-'}</td>
+                    <td>{metrics.recommendation?.[dim]?.mainstream?.relax_steps || '0'}</td>
+                    <td>{formatPct(metrics.recommendation?.[dim]?.mainstream?.used_threshold)}</td>
+                  </tr>
+                  <tr>
+                    <td>潜力</td>
+                    <td>{metrics.recommendation?.[dim]?.gap?.candidate_pool_size || '-'}</td>
+                    <td>{metrics.recommendation?.[dim]?.gap?.final_reco_count || '-'}</td>
+                    <td>{metrics.recommendation?.[dim]?.gap?.relax_steps || '0'}</td>
+                    <td>{formatPct(metrics.recommendation?.[dim]?.gap?.used_threshold)}</td>
+                  </tr>
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 进阶推荐指标 */}
+      {metrics.advancement?.available && (
+        <div className="advice-metrics-section">
+          <div className="advice-metrics-section-title">进阶推荐指标 ({metrics.advancement.currentLevel} → {metrics.advancement.targetLevel})</div>
+          <div className="advice-metrics-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>维度</th>
+                  <th>目标技术数</th>
+                  <th>满足条件数</th>
+                  <th>推荐数</th>
+                  <th>平均提升</th>
+                </tr>
+              </thead>
+              <tbody>
+                {['language', 'database', 'webframe', 'platform'].map((dim) => (
+                  <tr key={dim}>
+                    <td>{dim === 'language' ? '语言' : dim === 'database' ? '数据库' : dim === 'webframe' ? '框架' : '平台'}</td>
+                    <td>{metrics.advancement?.[dim]?.total_target_tech || '-'}</td>
+                    <td>{metrics.advancement?.[dim]?.candidates_above_threshold || '-'}</td>
+                    <td>{metrics.advancement?.[dim]?.final_reco_count || '-'}</td>
+                    <td>{formatPct(metrics.advancement?.[dim]?.avg_lift)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 高薪差异分析指标 */}
+      {metrics.salaryTierDiff?.available && (
+        <div className="advice-metrics-section">
+          <div className="advice-metrics-section-title">高薪vs低薪技术差异指标</div>
+          <div className="advice-metrics-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>维度</th>
+                  <th>高薪样本</th>
+                  <th>低薪样本</th>
+                  <th>满足条件数</th>
+                  <th>推荐数</th>
+                  <th>平均差异</th>
+                </tr>
+              </thead>
+              <tbody>
+                {['language', 'database', 'webframe', 'platform'].map((dim) => (
+                  <tr key={dim}>
+                    <td>{dim === 'language' ? '语言' : dim === 'database' ? '数据库' : dim === 'webframe' ? '框架' : '平台'}</td>
+                    <td>{metrics.salaryTierDiff?.[dim]?.highN?.toLocaleString() || '-'}</td>
+                    <td>{metrics.salaryTierDiff?.[dim]?.lowN?.toLocaleString() || '-'}</td>
+                    <td>{metrics.salaryTierDiff?.[dim]?.candidates_above_threshold || '-'}</td>
+                    <td>{metrics.salaryTierDiff?.[dim]?.user_missing_count || '-'}</td>
+                    <td>{formatPct(metrics.salaryTierDiff?.[dim]?.avg_diff)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div className="advice-metrics-footer">
+        生成时间: {metrics.timestamp || '-'}
+      </div>
+    </div>
+  );
+};
+
+// 数据源质量展示组件
+const FX_USD_TO_CNY = 7.06;
+
+const GoldMetadataDisplay = ({ goldMetadata }) => {
+  if (!goldMetadata) return null;
+
+  const formatPct = (v) => {
+    if (v === null || v === undefined || Number.isNaN(Number(v))) return '-';
+    return `${(Number(v) * 100).toFixed(1)}%`;
+  };
+
+  const formatMoneyCny = (v) => {
+    if (v === null || v === undefined || Number.isNaN(Number(v))) return '-';
+    const cny = Number(v) * FX_USD_TO_CNY;
+    return `¥${cny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`;
+  };
+
+  return (
+    <div className="advice-gold-metadata">
+      <h4 className="advice-metrics-title">数据源质量（Gold表构建指标）</h4>
+
+      {/* 构建信息 */}
+      <div className="advice-metrics-section">
+        <div className="advice-metrics-section-title">构建信息</div>
+        <div className="advice-metrics-grid">
+          <div className="advice-metrics-item">
+            <span className="advice-metrics-label">数据年份</span>
+            <span className="advice-metrics-value">{goldMetadata.data_year || '-'}</span>
+          </div>
+          <div className="advice-metrics-item">
+            <span className="advice-metrics-label">构建时间</span>
+            <span className="advice-metrics-value">{goldMetadata.build_timestamp ? new Date(goldMetadata.build_timestamp).toLocaleString('zh-CN') : '-'}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 数据质量 */}
+      {goldMetadata.data_quality && (
+        <div className="advice-metrics-section">
+          <div className="advice-metrics-section-title">样本量统计</div>
+          <div className="advice-metrics-grid">
+            <div className="advice-metrics-item">
+              <span className="advice-metrics-label">原始样本</span>
+              <span className="advice-metrics-value">{goldMetadata.data_quality.total_raw_samples?.toLocaleString() || '-'}</span>
+            </div>
+            <div className="advice-metrics-item">
+              <span className="advice-metrics-label">清洗后样本</span>
+              <span className="advice-metrics-value">{goldMetadata.data_quality.total_clean_samples?.toLocaleString() || '-'}</span>
+            </div>
+            <div className="advice-metrics-item">
+              <span className="advice-metrics-label">有效薪资样本</span>
+              <span className="advice-metrics-value">{goldMetadata.data_quality.valid_salary_samples?.toLocaleString() || '-'}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 全局薪资分布 */}
+      {goldMetadata.salary_benchmark?.global_percentiles && (
+        <div className="advice-metrics-section">
+          <div className="advice-metrics-section-title">全局薪资分布（CNY）</div>
+          <div className="advice-metrics-grid">
+            <div className="advice-metrics-item">
+              <span className="advice-metrics-label">P25</span>
+              <span className="advice-metrics-value">{formatMoneyCny(goldMetadata.salary_benchmark.global_percentiles.p25)}</span>
+            </div>
+            <div className="advice-metrics-item">
+              <span className="advice-metrics-label">P50</span>
+              <span className="advice-metrics-value">{formatMoneyCny(goldMetadata.salary_benchmark.global_percentiles.p50)}</span>
+            </div>
+            <div className="advice-metrics-item">
+              <span className="advice-metrics-label">P75</span>
+              <span className="advice-metrics-value">{formatMoneyCny(goldMetadata.salary_benchmark.global_percentiles.p75)}</span>
+            </div>
+            <div className="advice-metrics-item">
+              <span className="advice-metrics-label">P90</span>
+              <span className="advice-metrics-value">{formatMoneyCny(goldMetadata.salary_benchmark.global_percentiles.p90)}</span>
+            </div>
+            <div className="advice-metrics-item">
+              <span className="advice-metrics-label">平均值</span>
+              <span className="advice-metrics-value">{formatMoneyCny(goldMetadata.salary_benchmark.global_percentiles.avg)}</span>
+            </div>
+            <div className="advice-metrics-item">
+              <span className="advice-metrics-label">标准差</span>
+              <span className="advice-metrics-value">{formatMoneyCny(goldMetadata.salary_benchmark.global_percentiles.stddev)}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 分层覆盖度 */}
+      {goldMetadata.salary_benchmark?.level_coverage && (
+        <div className="advice-metrics-section">
+          <div className="advice-metrics-section-title">薪资基准层级覆盖</div>
+          <div className="advice-metrics-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>层级</th>
+                  <th>组合数</th>
+                  <th>总样本</th>
+                  <th>平均样本/组合</th>
+                </tr>
+              </thead>
+              <tbody>
+                {['L1', 'L2', 'L3', 'L4'].map((level) => (
+                  <tr key={level}>
+                    <td>{level} {LEVEL_INFO[level]?.precision}（{LEVEL_INFO[level]?.dimension}）</td>
+                    <td>{goldMetadata.salary_benchmark.level_coverage[level]?.combinations?.toLocaleString() || '-'}</td>
+                    <td>{goldMetadata.salary_benchmark.level_coverage[level]?.total_samples?.toLocaleString() || '-'}</td>
+                    <td>{level === 'L1' ? goldMetadata.salary_benchmark.level_coverage.L1?.avg_per_combo?.toFixed(1) || '-' : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 技术趋势统计 */}
+      {goldMetadata.tech_trends && (
+        <div className="advice-metrics-section">
+          <div className="advice-metrics-section-title">技术趋势统计</div>
+          <div className="advice-metrics-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>维度</th>
+                  <th>技术数</th>
+                  <th>平均Have</th>
+                  <th>平均Want</th>
+                  <th>平均Gap</th>
+                  <th>最大Gap</th>
+                </tr>
+              </thead>
+              <tbody>
+                {['language', 'database', 'webframe', 'platform'].map((dim) => (
+                  <tr key={dim}>
+                    <td>{dim === 'language' ? '语言' : dim === 'database' ? '数据库' : dim === 'webframe' ? '框架' : '平台'}</td>
+                    <td>{goldMetadata.tech_trends[dim]?.unique_techs || '-'}</td>
+                    <td>{formatPct(goldMetadata.tech_trends[dim]?.avg_have_rate)}</td>
+                    <td>{formatPct(goldMetadata.tech_trends[dim]?.avg_want_rate)}</td>
+                    <td>{formatPct(goldMetadata.tech_trends[dim]?.avg_gap)}</td>
+                    <td>{formatPct(goldMetadata.tech_trends[dim]?.max_gap)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AdviceDataView = ({ analysisText, adviceData }) => {
   const salary = adviceData?.salary || null;
   const tech = adviceData?.tech || null;
@@ -576,15 +933,6 @@ const AdviceDataView = ({ analysisText, adviceData }) => {
   if (!salary && !tech) {
     return <RichTextBlock text={analysisText} />;
   }
-
-  // 映射口径到友好文字
-  const getLevelText = (level) => {
-    if (level.includes('T1')) return '精准';
-    if (level.includes('T2')) return '较精准';
-    if (level.includes('T3')) return '宽泛';
-    if (level.includes('T4')) return '粗略';
-    return '未知';
-  };
 
   return (
     <div className="advice-output">
@@ -601,12 +949,12 @@ const AdviceDataView = ({ analysisText, adviceData }) => {
         <div className="advice-viz-card advice-tech-card">
           <div className="advice-viz-head">
             <div>
-              <div className="advice-eyebrow">Stack · Market Signals</div>
-              <h3 className="advice-card-title">技术栈建议（市场需求信号）</h3>
+              <div className="advice-eyebrow">Stack · Market Signal</div>
+              <h3 className="advice-card-title">市场信号 · 技术需求与供给趋势</h3>
               <div className="advice-viz-subtitle">
-                <strong>Want</strong> 想用占比 · <strong>Have</strong> 在用占比 · <strong>Gap</strong> 需求缺口 = Want - Have
+                <strong>Want</strong> 想用占比 · <strong>Have</strong> 在用占比 · <strong>Gap</strong> 需求缺口 = Want − Have
                 <br />
-                对标精准度：语言 {getLevelText(tech.cohort?.levels?.language)} · 数据库 {getLevelText(tech.cohort?.levels?.database)} · 框架 {getLevelText(tech.cohort?.levels?.webframe)} · 平台 {getLevelText(tech.cohort?.levels?.platform)}
+                对标精度：语言 {getLevelPrecision(tech.cohort?.levels?.language)} · 数据库 {getLevelPrecision(tech.cohort?.levels?.database)} · 框架 {getLevelPrecision(tech.cohort?.levels?.webframe)} · 平台 {getLevelPrecision(tech.cohort?.levels?.platform)}
               </div>
             </div>
           </div>
@@ -637,8 +985,9 @@ const AdviceDataView = ({ analysisText, adviceData }) => {
       ) : null}
 
       <details className="advice-details">
-        <summary>查看完整分析文本</summary>
-        <RichTextBlock text={analysisText} />
+        <summary>查看算法指标</summary>
+        <GoldMetadataDisplay goldMetadata={adviceData?.goldMetadata} />
+        <MetricsDisplay metrics={adviceData?.metrics} />
       </details>
     </div>
   );
@@ -721,116 +1070,7 @@ const PersonalAdvice = () => {
 
   // ✅ 文本生成函数：将后端返回的数据转换为用户友好的文本
   const generateAnalysisText = useMemo(() => {
-    if (!adviceData) return '';
-
-    const { userProfile, salary, tech } = adviceData;
-    const lines = [];
-
-    // 1. 用户画像
-    lines.push('**你现在的画像（用来做对标和建议）**');
-    lines.push(`- 方向：${userProfile.devtypeFamily}（由你选择的岗位方向映射）`);
-    lines.push(`- 经验：${userProfile.workexpBin} 年（按区间归档）`);
-    lines.push('');
-
-    // 2. 薪资对标
-    lines.push('**薪资对标（市场参考）**');
-    if (!salary) {
-      lines.push('- 暂时没拿到薪资基准数据（可能是数据未生成或口径命中失败）。');
-    } else {
-      lines.push(
-        `- 同类人群年薪大致在 **${fmtMoney(salary.p25)}（P25）— ${fmtMoney(salary.p90)}（P90）** 之间；` +
-        `中位数 P50 约 **${fmtMoney(salary.p50)}**。`
-      );
-      lines.push(
-        `- 参考口径：样本 n=${salary.n}（可信度：${salary.confidence}），对标粒度=${salary.level}，汇率口径=${salary.fx}。`
-      );
-
-      if (salary.isMarketRef) {
-        lines.push('- 你当前为学生：这里对标的是"入门在职人群"的市场分布，用来帮你定预期（不是对你当下收入的判断）。');
-      }
-
-      if (salary.userSalaryBand) {
-        const band = salary.userSalaryBand;
-        lines.push(`- 你填写的薪资区间：**${band.text}**`);
-
-        if (band.loCny !== null || band.hiCny !== null) {
-          const loUsd = band.loUsd;
-          const hiUsd = band.hiUsd;
-          const p25Usd = salary.p25Usd;
-          const p50Usd = salary.p50Usd;
-          const p75Usd = salary.p75Usd;
-
-          let hint = '';
-          if (hiUsd !== null && hiUsd <= p25Usd) {
-            hint = '整体偏保守（上沿都低于 P25）。';
-          } else if (loUsd !== null && loUsd >= p75Usd) {
-            hint = '整体偏进取（下沿已接近/高于 P75）。';
-          } else if (loUsd !== null && hiUsd !== null) {
-            if (hiUsd <= p50Usd) {
-              hint = '大概率落在 P50 以下。';
-            } else if (loUsd >= p50Usd) {
-              hint = '大概率落在 P50 以上。';
-            } else {
-              hint = '和 P50/P75 有重叠：更看项目深度、匹配度和面试发挥。';
-            }
-          }
-
-          if (hint) {
-            lines.push(`- 这档预期怎么看：${hint}`);
-          }
-        }
-      }
-    }
-
-    lines.push('');
-    lines.push('**技术栈怎么补（更像面试官能听懂的说法）**');
-    lines.push('- 先把"主流地基"补齐：让你能更稳定地拿到面试机会、也更容易做出可讲的项目。');
-    lines.push('- 再选 1 个"潜力加分"深挖：让你的简历有亮点，但不至于太分散。');
-
-    // 3. 技术栈建议
-    const hasAnyRecos =
-      tech.language.mainstream.length > 0 || tech.language.gap.length > 0 ||
-      tech.database.mainstream.length > 0 || tech.database.gap.length > 0 ||
-      tech.webframe.mainstream.length > 0 || tech.webframe.gap.length > 0 ||
-      tech.platform?.mainstream?.length > 0 || tech.platform?.gap?.length > 0;
-
-    if (!hasAnyRecos) {
-      lines.push('');
-      lines.push('- 你已选的栈覆盖度很高，或者同类样本很分散：建议直接对齐目标岗位 JD，补齐 **1 个主栈 + 1 个数据库 + 1 个框架 + 1 个平台/工具** 的"可讲闭环项目"。');
-    }
-
-    // 已选技术的普及度
-    const hasChosen = tech.language.chosen.length > 0 || tech.database.chosen.length > 0 || tech.webframe.chosen.length > 0 || tech.platform?.chosen?.length > 0;
-    if (hasChosen) {
-      lines.push('');
-      lines.push('**你已选技术在同类人群中的普及度（参考）**');
-      if (tech.language.chosen.length > 0) {
-        lines.push('语言：');
-        tech.language.chosen.forEach(item => {
-          lines.push(`- ${item.tech}（在该统计口径中 have≈${fmtPct(item.have)}）`);
-        });
-      }
-      if (tech.database.chosen.length > 0) {
-        lines.push('数据库：');
-        tech.database.chosen.forEach(item => {
-          lines.push(`- ${item.tech}（在该统计口径中 have≈${fmtPct(item.have)}）`);
-        });
-      }
-      if (tech.webframe.chosen.length > 0) {
-        lines.push('框架：');
-        tech.webframe.chosen.forEach(item => {
-          lines.push(`- ${item.tech}（在该统计口径中 have≈${fmtPct(item.have)}）`);
-        });
-      }
-      if (tech.platform?.chosen?.length > 0) {
-        lines.push('平台/工具：');
-        tech.platform.chosen.forEach(item => {
-          lines.push(`- ${item.tech}（在该统计口径中 have≈${fmtPct(item.have)}）`);
-        });
-      }
-    }
-
-    return lines.join('\n');
+    return '';
   }, [adviceData]);
 
   const generateAiSummary = useMemo(() => {
@@ -1315,8 +1555,8 @@ const PersonalAdvice = () => {
       <section className="advice-section advice-section-bottom">
         <div className="advice-section-header advice-section-header-with-action">
           <div className="advice-section-header-text">
-            <h2>建议区 · Data & AI</h2>
-            <p>内容将由后端服务生成；未生成时会显示提示文案。</p>
+            <h2>分析建议</h2>
+            <p>基于你填写的信息，生成个性化的数据洞察与行动建议。</p>
             {generateError ? <p className="advice-generate-error">{generateError}</p> : null}
           </div>
 
@@ -1335,20 +1575,20 @@ const PersonalAdvice = () => {
           <div className="advice-card advice-suggestion-card">
             <div className="advice-card-header">
               <div>
-                <div className="advice-eyebrow">Suggestion · Data View</div>
-                <h3 className="advice-card-title">数据分析建议</h3>
+                <div className="advice-eyebrow">Output · Data Analysis</div>
+                <h3 className="advice-card-title">数据洞察 · 基于统计的客观分析</h3>
               </div>
             </div>
             <div className="advice-suggestion-body">
-              {!hasGenerated || !generateAnalysisText ? emptyHint : <AdviceDataView analysisText={generateAnalysisText} adviceData={adviceData} />}
+              {!hasGenerated || !adviceData ? emptyHint : <AdviceDataView analysisText={generateAnalysisText} adviceData={adviceData} />}
             </div>
           </div>
 
           <div className="advice-card advice-suggestion-card">
             <div className="advice-card-header">
               <div>
-                <div className="advice-eyebrow">Suggestion · AI Advice</div>
-                <h3 className="advice-card-title">AI 建议</h3>
+                <div className="advice-eyebrow">Output · AI Summary</div>
+                <h3 className="advice-card-title">行动建议 · 基于数据分析结果的AI建议</h3>
               </div>
             </div>
             <div className="advice-suggestion-body">

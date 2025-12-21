@@ -145,12 +145,37 @@ class SalaryTierTechData(BaseModel):
     platform: SalaryTierTechCategory
 
 
+class MetricsData(BaseModel):
+    """算法指标数据"""
+    timestamp: str
+    userProfile: dict
+    salaryBenchmark: dict
+    trendCohort: dict
+    recommendation: dict
+    advancement: dict
+    salaryTierDiff: dict
+
+
+class GoldMetadata(BaseModel):
+    """Gold表构建元数据"""
+    build_timestamp: str = None
+    data_year: int = None
+    source: dict = None
+    data_quality: dict = None
+    salary_benchmark: dict = None
+    tech_trends: dict = None
+    salary_tier: dict = None
+
+
 class AdviceResponse(BaseModel):
     userProfile: UserProfile
     salary: SalaryData = None
     tech: TechData
     advancement: AdvancementData = None
     salaryTierTech: SalaryTierTechData = None
+    metrics: MetricsData = None
+    metricsFile: str = None
+    goldMetadata: GoldMetadata = None
 
 
 def _validate(p: AdvicePayload) -> None:

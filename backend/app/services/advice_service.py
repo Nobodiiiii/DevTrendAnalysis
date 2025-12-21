@@ -1,10 +1,53 @@
 from __future__ import annotations
 
+import json
+import os
 import re
 import threading
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from pyspark.sql import SparkSession, DataFrame, functions as F
+
+# =========================
+# Metrics output directory
+# =========================
+METRICS_OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "logs")
+os.makedirs(METRICS_OUTPUT_DIR, exist_ok=True)
+
+# Gold 元数据路径
+GOLD_METADATA_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "gold_metadata", "gold_2025_metadata.json")
+
+# 缓存 Gold 元数据
+_gold_metadata: Optional[Dict[str, Any]] = None
+_gold_metadata_loaded: bool = False
+
+
+def _load_gold_metadata() -> Optional[Dict[str, Any]]:
+    """加载 Gold 表构建时生成的元数据"""
+    global _gold_metadata, _gold_metadata_loaded
+    if _gold_metadata_loaded:
+        return _gold_metadata
+    try:
+        if os.path.exists(GOLD_METADATA_PATH):
+            with open(GOLD_METADATA_PATH, "r", encoding="utf-8") as f:
+                _gold_metadata = json.load(f)
+        else:
+            _gold_metadata = None
+    except Exception:
+        _gold_metadata = None
+    _gold_metadata_loaded = True
+    return _gold_metadata
+
+
+def _save_metrics_to_file(metrics: Dict[str, Any]) -> str:
+    """将指标保存到本地文件，返回文件路径"""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    filename = f"advice_metrics_{timestamp}.json"
+    filepath = os.path.join(METRICS_OUTPUT_DIR, filename)
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(metrics, f, ensure_ascii=False, indent=2)
+    return filepath
 
 # =========================
 # HDFS Gold paths (2025)
@@ -413,23 +456,39 @@ def _trend_pick_recos(
         *,
         base_min_want_rate: float,
         mode: str,  # "mainstream" | "gap"
-) -> Tuple[List[str], float]:
+) -> Tuple[List[str], float, Dict[str, Any]]:
     """
     两种推荐：
       - mainstream: 按 want_rate 排（先补主流地基）
       - gap: 按 gap 排（潜力加分，但仍受 want_rate 门槛约束）
     为避免空结果：min_want_rate 会按 RELAX_FACTORS 自动降档。
-    返回：lines, used_min_want_rate
+    返回：lines, used_min_want_rate, metrics
     """
+    metrics = {
+        "mode": mode,
+        "base_threshold": base_min_want_rate,
+        "used_threshold": base_min_want_rate,
+        "relax_steps": 0,
+        "candidate_pool_size": 0,
+        "final_reco_count": 0,
+        "selected_excluded": len(selected_set),
+    }
+
     if cohort_df is None:
-        return [], base_min_want_rate
+        metrics["status"] = "no_cohort_data"
+        return [], base_min_want_rate, metrics
 
     df = cohort_df
+    # 统计候选池大小（排除已选）
+    total_candidates = df.count() if df is not None else 0
     if selected_set:
         df = df.where(~F.col("tech").isin(list(selected_set)))
+    candidates_after_exclude = df.count() if df is not None else 0
+    metrics["total_tech_count"] = total_candidates
+    metrics["candidate_pool_size"] = candidates_after_exclude
 
     # 逐级放宽阈值，直到拿到结果
-    for factor in RELAX_FACTORS:
+    for step, factor in enumerate(RELAX_FACTORS):
         thr = float(base_min_want_rate) * float(factor)
         cand = df.where(F.col("want_rate") >= F.lit(thr))
 
@@ -446,9 +505,14 @@ def _trend_pick_recos(
                 out.append(
                     f"- {d['tech']}（gap {float(d['gap']):+.1%}，want {float(d['want_rate']):.1%} vs have {float(d['have_rate']):.1%}）"
                 )
-            return out, thr
+            metrics["used_threshold"] = thr
+            metrics["relax_steps"] = step
+            metrics["final_reco_count"] = len(out)
+            metrics["status"] = "success"
+            return out, thr, metrics
 
-    return [], base_min_want_rate
+    metrics["status"] = "no_results_after_relax"
+    return [], base_min_want_rate, metrics
 
 
 def _trend_pick_chosen_popularity(
@@ -580,37 +644,44 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
         return {"tech": m.group(1).strip(), "have": float(m.group(2)) / 100.0}
 
     # ===== Two-stage recommendations: mainstream + gap
+    # 收集推荐系统指标
+    reco_metrics = {}
+
     # language
-    lang_main_lines, lang_main_thr = _trend_pick_recos(
+    lang_main_lines, lang_main_thr, lang_main_metrics = _trend_pick_recos(
         lang_cohort, sel_lang_set, 3, base_min_want_rate=LANG_MIN_WANT, mode="mainstream"
     )
-    lang_gap_lines, lang_gap_thr = _trend_pick_recos(
+    lang_gap_lines, lang_gap_thr, lang_gap_metrics = _trend_pick_recos(
         lang_cohort, sel_lang_set, 3, base_min_want_rate=LANG_MIN_WANT, mode="gap"
     )
+    reco_metrics["language"] = {"mainstream": lang_main_metrics, "gap": lang_gap_metrics}
 
     # database
-    db_main_lines, db_main_thr = _trend_pick_recos(
+    db_main_lines, db_main_thr, db_main_metrics = _trend_pick_recos(
         db_cohort, sel_db_set, 3, base_min_want_rate=DB_MIN_WANT, mode="mainstream"
     )
-    db_gap_lines, db_gap_thr = _trend_pick_recos(
+    db_gap_lines, db_gap_thr, db_gap_metrics = _trend_pick_recos(
         db_cohort, sel_db_set, 3, base_min_want_rate=DB_MIN_WANT, mode="gap"
     )
+    reco_metrics["database"] = {"mainstream": db_main_metrics, "gap": db_gap_metrics}
 
     # webframe
-    web_main_lines, web_main_thr = _trend_pick_recos(
+    web_main_lines, web_main_thr, web_main_metrics = _trend_pick_recos(
         web_cohort, sel_web_set, 3, base_min_want_rate=WEB_MIN_WANT, mode="mainstream"
     )
-    web_gap_lines, web_gap_thr = _trend_pick_recos(
+    web_gap_lines, web_gap_thr, web_gap_metrics = _trend_pick_recos(
         web_cohort, sel_web_set, 3, base_min_want_rate=WEB_MIN_WANT, mode="gap"
     )
+    reco_metrics["webframe"] = {"mainstream": web_main_metrics, "gap": web_gap_metrics}
 
     # platform
-    platform_main_lines, platform_main_thr = _trend_pick_recos(
+    platform_main_lines, platform_main_thr, platform_main_metrics = _trend_pick_recos(
         platform_cohort, sel_platform_set, 3, base_min_want_rate=PLATFORM_MIN_WANT, mode="mainstream"
     )
-    platform_gap_lines, platform_gap_thr = _trend_pick_recos(
+    platform_gap_lines, platform_gap_thr, platform_gap_metrics = _trend_pick_recos(
         platform_cohort, sel_platform_set, 3, base_min_want_rate=PLATFORM_MIN_WANT, mode="gap"
     )
+    reco_metrics["platform"] = {"mainstream": platform_main_metrics, "gap": platform_gap_metrics}
 
     chosen_lang_lines = _trend_pick_chosen_popularity(lang_cohort, sel_lang_set, limit_n=3)
     chosen_db_lines = _trend_pick_chosen_popularity(db_cohort, sel_db_set, limit_n=3)
@@ -698,6 +769,7 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     # ===== 进阶建议：查询进阶人群的技术画像
     advancement_data: Optional[Dict[str, Any]] = None
+    advancement_metrics: Dict[str, Any] = {"available": False}
     target_wb = WORKEXP_ADVANCEMENT.get(wb)
 
     if target_wb is not None:
@@ -720,10 +792,21 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
             target_cohort: Optional[DataFrame],
             selected_set: set,
             top_k: int = 2,
-        ) -> List[Dict[str, Any]]:
-            """计算进阶增益：找出进阶人群中更普及但用户未选的技术"""
+        ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+            """计算进阶增益：找出进阶人群中更普及但用户未选的技术
+            返回：(推荐项列表, 指标)
+            """
+            metrics = {
+                "total_target_tech": 0,
+                "candidates_after_exclude": 0,
+                "candidates_above_threshold": 0,
+                "final_reco_count": 0,
+                "avg_lift": 0.0,
+            }
+
             if current_cohort is None or target_cohort is None:
-                return []
+                metrics["status"] = "no_cohort_data"
+                return [], metrics
 
             # 获取当前人群和进阶人群的 have_rate
             current_rows = current_cohort.select("tech", "have_rate").collect()
@@ -732,11 +815,15 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
             current_map = {r["tech"]: float(r["have_rate"]) for r in current_rows}
             target_map = {r["tech"]: float(r["have_rate"]) for r in target_rows}
 
+            metrics["total_target_tech"] = len(target_map)
+
             # 计算增益
             candidates = []
+            excluded_count = 0
             for tech, target_have in target_map.items():
                 # 跳过用户已选的技术
                 if tech in selected_set:
+                    excluded_count += 1
                     continue
                 # 进阶人群 have_rate 必须达到最低门槛
                 if target_have < ADV_MIN_TARGET_HAVE:
@@ -753,14 +840,24 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
                     "lift": lift,
                 })
 
+            metrics["candidates_after_exclude"] = len(target_map) - excluded_count
+            metrics["candidates_above_threshold"] = len(candidates)
+
             # 按增益降序排序，取 top_k
             candidates.sort(key=lambda x: x["lift"], reverse=True)
-            return candidates[:top_k]
+            result = candidates[:top_k]
 
-        adv_lang_items = _compute_advancement_items(lang_cohort, adv_lang_cohort, sel_lang_set, top_k=2)
-        adv_db_items = _compute_advancement_items(db_cohort, adv_db_cohort, sel_db_set, top_k=2)
-        adv_web_items = _compute_advancement_items(web_cohort, adv_web_cohort, sel_web_set, top_k=2)
-        adv_platform_items = _compute_advancement_items(platform_cohort, adv_platform_cohort, sel_platform_set, top_k=2)
+            metrics["final_reco_count"] = len(result)
+            if result:
+                metrics["avg_lift"] = sum(c["lift"] for c in result) / len(result)
+            metrics["status"] = "success"
+
+            return result, metrics
+
+        adv_lang_items, adv_lang_metrics = _compute_advancement_items(lang_cohort, adv_lang_cohort, sel_lang_set, top_k=2)
+        adv_db_items, adv_db_metrics = _compute_advancement_items(db_cohort, adv_db_cohort, sel_db_set, top_k=2)
+        adv_web_items, adv_web_metrics = _compute_advancement_items(web_cohort, adv_web_cohort, sel_web_set, top_k=2)
+        adv_platform_items, adv_platform_metrics = _compute_advancement_items(platform_cohort, adv_platform_cohort, sel_platform_set, top_k=2)
 
         # 只有当有推荐项时才返回进阶数据
         has_any_advancement = bool(adv_lang_items or adv_db_items or adv_web_items or adv_platform_items)
@@ -775,21 +872,43 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
             "platform": adv_platform_items,
         }
 
+        advancement_metrics = {
+            "available": True,
+            "currentLevel": wb,
+            "targetLevel": target_wb,
+            "language": adv_lang_metrics,
+            "database": adv_db_metrics,
+            "webframe": adv_web_metrics,
+            "platform": adv_platform_metrics,
+        }
+
     # ===== 高薪vs低薪技术差异分析
     salary_tier_tech_data: Optional[Dict[str, Any]] = None
+    salary_tier_metrics: Dict[str, Any] = {"available": False}
 
     def _compute_salary_tier_diff(
         tier_df: Optional[DataFrame],
         fam: str,
         selected_set: set,
         top_k: int = 3,
-    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any]]:
         """
         计算高薪人群vs低薪人群的技术差异
-        返回：(推荐技术列表, 元信息)
+        返回：(用户缺失的推荐技术列表, 用户已有的技术列表, 指标)
         """
+        metrics = {
+            "available": False,
+            "total_high_tech": 0,
+            "total_low_tech": 0,
+            "candidates_above_threshold": 0,
+            "user_missing_count": 0,
+            "user_has_count": 0,
+            "avg_diff": 0.0,
+        }
+
         if tier_df is None:
-            return [], {"available": False, "reason": "数据表未加载"}
+            metrics["reason"] = "数据表未加载"
+            return [], [], metrics
 
         # 按 devtype_family 筛选
         filtered = tier_df.where(F.col("devtype_family") == fam)
@@ -798,21 +917,30 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
         high_rows = filtered.where(F.col("salary_tier") == "high").select("tech", "have_rate", "n").collect()
         low_rows = filtered.where(F.col("salary_tier") == "low").select("tech", "have_rate", "n").collect()
 
+        fallback_used = False
         if not high_rows or not low_rows:
             # 尝试回退到全局数据
+            fallback_used = True
             filtered = tier_df
             high_rows = filtered.where(F.col("salary_tier") == "high").select("tech", "have_rate", "n").collect()
             low_rows = filtered.where(F.col("salary_tier") == "low").select("tech", "have_rate", "n").collect()
 
             if not high_rows or not low_rows:
-                return [], {"available": False, "reason": "高薪或低薪人群数据不足"}
+                metrics["reason"] = "高薪或低薪人群数据不足"
+                return [], [], metrics
 
         high_map = {r["tech"]: float(r["have_rate"]) for r in high_rows}
         low_map = {r["tech"]: float(r["have_rate"]) for r in low_rows}
 
+        metrics["total_high_tech"] = len(high_map)
+        metrics["total_low_tech"] = len(low_map)
+        metrics["fallback_to_global"] = fallback_used
+
         # 获取样本量信息
         high_n = int(high_rows[0]["n"]) if high_rows else 0
         low_n = int(low_rows[0]["n"]) if low_rows else 0
+        metrics["highN"] = high_n
+        metrics["lowN"] = low_n
 
         # 计算差异：高薪人群 have_rate 比低薪人群高的技术
         candidates = []
@@ -833,6 +961,8 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
                     "userHas": tech in selected_set,
                 })
 
+        metrics["candidates_above_threshold"] = len(candidates)
+
         # 按差异降序排序
         candidates.sort(key=lambda x: x["diff"], reverse=True)
 
@@ -840,30 +970,30 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
         user_missing = [c for c in candidates if not c["userHas"]][:top_k]
         user_has = [c for c in candidates if c["userHas"]][:top_k]
 
-        meta = {
-            "available": True,
-            "highN": high_n,
-            "lowN": low_n,
-            "devtypeFamily": fam,
-        }
+        metrics["user_missing_count"] = len(user_missing)
+        metrics["user_has_count"] = len(user_has)
+        if candidates:
+            metrics["avg_diff"] = sum(c["diff"] for c in candidates) / len(candidates)
+        metrics["available"] = True
+        metrics["devtypeFamily"] = fam
 
-        return user_missing, user_has, meta
+        return user_missing, user_has, metrics
 
     # 只有当薪资分层表存在时才计算
     if lang_salary_tier_df is not None or db_salary_tier_df is not None or web_salary_tier_df is not None or platform_salary_tier_df is not None:
-        lang_missing, lang_has, lang_meta = _compute_salary_tier_diff(
+        lang_missing, lang_has, lang_tier_metrics = _compute_salary_tier_diff(
             lang_salary_tier_df, fam, sel_lang_set, top_k=3
         ) if lang_salary_tier_df is not None else ([], [], {"available": False})
 
-        db_missing, db_has, db_meta = _compute_salary_tier_diff(
+        db_missing, db_has, db_tier_metrics = _compute_salary_tier_diff(
             db_salary_tier_df, fam, sel_db_set, top_k=3
         ) if db_salary_tier_df is not None else ([], [], {"available": False})
 
-        web_missing, web_has, web_meta = _compute_salary_tier_diff(
+        web_missing, web_has, web_tier_metrics = _compute_salary_tier_diff(
             web_salary_tier_df, fam, sel_web_set, top_k=3
         ) if web_salary_tier_df is not None else ([], [], {"available": False})
 
-        platform_missing, platform_has, platform_meta = _compute_salary_tier_diff(
+        platform_missing, platform_has, platform_tier_metrics = _compute_salary_tier_diff(
             platform_salary_tier_df, fam, sel_platform_set, top_k=3
         ) if platform_salary_tier_df is not None else ([], [], {"available": False})
 
@@ -875,26 +1005,64 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
             "language": {
                 "missing": lang_missing,
                 "has": lang_has,
-                "meta": lang_meta,
+                "meta": lang_tier_metrics,
             },
             "database": {
                 "missing": db_missing,
                 "has": db_has,
-                "meta": db_meta,
+                "meta": db_tier_metrics,
             },
             "webframe": {
                 "missing": web_missing,
                 "has": web_has,
-                "meta": web_meta,
+                "meta": web_tier_metrics,
             },
             "platform": {
                 "missing": platform_missing,
                 "has": platform_has,
-                "meta": platform_meta,
+                "meta": platform_tier_metrics,
             },
         }
 
-    # 返回纯数据结构
+        salary_tier_metrics = {
+            "available": True,
+            "language": lang_tier_metrics,
+            "database": db_tier_metrics,
+            "webframe": web_tier_metrics,
+            "platform": platform_tier_metrics,
+        }
+
+    # ===== 汇总所有指标
+    all_metrics = {
+        "timestamp": datetime.now().isoformat(),
+        "userProfile": {
+            "profileType": profile_type,
+            "workexpBin": wb,
+            "devtypeFamily": fam,
+        },
+        "salaryBenchmark": {
+            "level": level_used,
+            "sampleSize": int(bench["n"]) if bench else 0,
+            "confidence": _confidence(int(bench["n"])) if bench else "无数据",
+        },
+        "trendCohort": {
+            "language": {"level": lang_lvl, "sampleSize": int(lang_n)},
+            "database": {"level": db_lvl, "sampleSize": int(db_n)},
+            "webframe": {"level": web_lvl, "sampleSize": int(web_n)},
+            "platform": {"level": platform_lvl, "sampleSize": int(platform_n)},
+        },
+        "recommendation": reco_metrics,
+        "advancement": advancement_metrics,
+        "salaryTierDiff": salary_tier_metrics,
+    }
+
+    # 保存指标到本地文件
+    metrics_file = _save_metrics_to_file(all_metrics)
+
+    # 加载 Gold 元数据
+    gold_metadata = _load_gold_metadata()
+
+    # 返回纯数据结构（包含指标）
     return {
         "userProfile": {
             "profileType": profile_type,
@@ -906,4 +1074,7 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
         "tech": tech_data,
         "advancement": advancement_data,
         "salaryTierTech": salary_tier_tech_data,
+        "metrics": all_metrics,
+        "metricsFile": metrics_file,
+        "goldMetadata": gold_metadata,
     }

@@ -1,3 +1,5 @@
+import json
+from datetime import datetime
 from pyspark.sql import SparkSession, functions as F
 
 SILVER_RAW = "hdfs:///advice/silver/survey_results_2025_raw"
@@ -294,6 +296,184 @@ build_trends_by_salary_tier(df, "db_have", "db_want", GOLD_TREND_DB_BY_SALARY, "
 build_trends_by_salary_tier(df, "web_have", "web_want", GOLD_TREND_WEB_BY_SALARY, "webframe")
 build_trends_by_salary_tier(df, "platform_have", "platform_want", GOLD_TREND_PLATFORM_BY_SALARY, "platform")
 
+# ===== 收集元数据指标 =====
+metadata = {
+    "build_timestamp": datetime.now().isoformat(),
+    "data_year": 2025,
+    "source": {
+        "silver_raw": SILVER_RAW,
+        "silver_clean": SILVER_CLEAN,
+    },
+    "data_quality": {},
+    "salary_benchmark": {},
+    "tech_trends": {},
+    "salary_tier": {},
+}
+
+# 1. 数据源质量指标
+total_raw = raw.count()
+total_clean = df.count()
+
+# 字段缺失率
+missing_stats = df.agg(
+    F.count("*").alias("total"),
+    F.sum(F.when(F.col("salary_yearly").isNull(), 1).otherwise(0)).alias("salary_null"),
+    F.sum(F.when(F.col("employment").isNull(), 1).otherwise(0)).alias("employment_null"),
+    F.sum(F.when(F.col("workexp").isNull(), 1).otherwise(0)).alias("workexp_null"),
+    F.sum(F.when(F.col("devtype").isNull(), 1).otherwise(0)).alias("devtype_null"),
+    F.sum(F.when(F.col("lang_have").isNull(), 1).otherwise(0)).alias("lang_have_null"),
+    F.sum(F.when(F.col("db_have").isNull(), 1).otherwise(0)).alias("db_have_null"),
+    F.sum(F.when(F.col("web_have").isNull(), 1).otherwise(0)).alias("web_have_null"),
+    F.sum(F.when(F.col("platform_have").isNull(), 1).otherwise(0)).alias("platform_have_null"),
+).collect()[0]
+
+metadata["data_quality"] = {
+    "total_raw_samples": total_raw,
+    "total_clean_samples": total_clean,
+    "valid_salary_samples": salary_df.count(),
+    "missing_rates": {
+        "salary": round(missing_stats["salary_null"] / missing_stats["total"], 4) if missing_stats["total"] > 0 else 0,
+        "employment": round(missing_stats["employment_null"] / missing_stats["total"], 4) if missing_stats["total"] > 0 else 0,
+        "workexp": round(missing_stats["workexp_null"] / missing_stats["total"], 4) if missing_stats["total"] > 0 else 0,
+        "devtype": round(missing_stats["devtype_null"] / missing_stats["total"], 4) if missing_stats["total"] > 0 else 0,
+        "lang_have": round(missing_stats["lang_have_null"] / missing_stats["total"], 4) if missing_stats["total"] > 0 else 0,
+        "db_have": round(missing_stats["db_have_null"] / missing_stats["total"], 4) if missing_stats["total"] > 0 else 0,
+        "web_have": round(missing_stats["web_have_null"] / missing_stats["total"], 4) if missing_stats["total"] > 0 else 0,
+        "platform_have": round(missing_stats["platform_have_null"] / missing_stats["total"], 4) if missing_stats["total"] > 0 else 0,
+    },
+}
+
+# 2. 薪资基准指标
+# 全局薪资分位数
+global_salary_stats = salary_df.agg(
+    F.count("*").alias("n"),
+    F.expr("percentile_approx(salary_yearly, 0.25)").alias("p25"),
+    F.expr("percentile_approx(salary_yearly, 0.50)").alias("p50"),
+    F.expr("percentile_approx(salary_yearly, 0.75)").alias("p75"),
+    F.expr("percentile_approx(salary_yearly, 0.90)").alias("p90"),
+    F.min("salary_yearly").alias("min"),
+    F.max("salary_yearly").alias("max"),
+    F.avg("salary_yearly").alias("avg"),
+    F.stddev("salary_yearly").alias("stddev"),
+).collect()[0]
+
+# L1 覆盖度统计
+l1_coverage = bench_l1.agg(
+    F.count("*").alias("total_combinations"),
+    F.sum("n").alias("total_samples"),
+    F.avg("n").alias("avg_samples_per_combo"),
+    F.min("n").alias("min_samples"),
+    F.max("n").alias("max_samples"),
+).collect()[0]
+
+# 各层级统计
+l2_stats = bench_l2.agg(F.count("*").alias("combos"), F.sum("n").alias("samples")).collect()[0]
+l3_stats = bench_l3.agg(F.count("*").alias("combos"), F.sum("n").alias("samples")).collect()[0]
+l4_stats = bench_l4.agg(F.count("*").alias("combos"), F.sum("n").alias("samples")).collect()[0]
+
+metadata["salary_benchmark"] = {
+    "global_percentiles": {
+        "n": int(global_salary_stats["n"]),
+        "p25": float(global_salary_stats["p25"]),
+        "p50": float(global_salary_stats["p50"]),
+        "p75": float(global_salary_stats["p75"]),
+        "p90": float(global_salary_stats["p90"]),
+        "min": float(global_salary_stats["min"]),
+        "max": float(global_salary_stats["max"]),
+        "avg": round(float(global_salary_stats["avg"]), 2),
+        "stddev": round(float(global_salary_stats["stddev"]), 2) if global_salary_stats["stddev"] else 0,
+    },
+    "level_coverage": {
+        "L1": {
+            "combinations": int(l1_coverage["total_combinations"]),
+            "total_samples": int(l1_coverage["total_samples"]),
+            "avg_per_combo": round(float(l1_coverage["avg_samples_per_combo"]), 1),
+            "min_samples": int(l1_coverage["min_samples"]),
+            "max_samples": int(l1_coverage["max_samples"]),
+        },
+        "L2": {
+            "combinations": int(l2_stats["combos"]),
+            "total_samples": int(l2_stats["samples"]),
+        },
+        "L3": {
+            "combinations": int(l3_stats["combos"]),
+            "total_samples": int(l3_stats["samples"]),
+        },
+        "L4": {
+            "combinations": int(l4_stats["combos"]),
+            "total_samples": int(l4_stats["samples"]),
+        },
+    },
+}
+
+# 3. 技术趋势指标
+def get_trend_stats(trend_df, tech_type):
+    """获取技术趋势表的统计指标"""
+    stats = trend_df.agg(
+        F.countDistinct("tech").alias("unique_techs"),
+        F.count("*").alias("total_rows"),
+        F.avg("have_rate").alias("avg_have"),
+        F.avg("want_rate").alias("avg_want"),
+        F.avg("gap").alias("avg_gap"),
+        F.max("gap").alias("max_gap"),
+        F.min("gap").alias("min_gap"),
+    ).collect()[0]
+
+    # 获取 gap 最大的前5个技术
+    top_gap = trend_df.orderBy(F.col("gap").desc()).limit(5).collect()
+
+    return {
+        "unique_techs": int(stats["unique_techs"]),
+        "total_rows": int(stats["total_rows"]),
+        "avg_have_rate": round(float(stats["avg_have"]), 4),
+        "avg_want_rate": round(float(stats["avg_want"]), 4),
+        "avg_gap": round(float(stats["avg_gap"]), 4),
+        "max_gap": round(float(stats["max_gap"]), 4),
+        "min_gap": round(float(stats["min_gap"]), 4),
+        "top_gap_techs": [
+            {"tech": r["tech"], "gap": round(float(r["gap"]), 4), "have": round(float(r["have_rate"]), 4), "want": round(float(r["want_rate"]), 4)}
+            for r in top_gap
+        ],
+    }
+
+# 读取刚写入的趋势表
+lang_trend = spark.read.parquet(GOLD_TREND_LANG)
+db_trend = spark.read.parquet(GOLD_TREND_DB)
+web_trend = spark.read.parquet(GOLD_TREND_WEB)
+platform_trend = spark.read.parquet(GOLD_TREND_PLATFORM)
+
+metadata["tech_trends"] = {
+    "language": get_trend_stats(lang_trend, "language"),
+    "database": get_trend_stats(db_trend, "database"),
+    "webframe": get_trend_stats(web_trend, "webframe"),
+    "platform": get_trend_stats(platform_trend, "platform"),
+}
+
+# 4. 薪资分层指标（只保留阈值，样本量已在 data_quality 中）
+lang_salary_tier = spark.read.parquet(GOLD_TREND_LANG_BY_SALARY)
+tier_thresholds = lang_salary_tier.select("p25_threshold", "p75_threshold").first()
+
+metadata["salary_tier"] = {
+    "thresholds": {
+        "p25": float(tier_thresholds["p25_threshold"]) if tier_thresholds else 0,
+        "p75": float(tier_thresholds["p75_threshold"]) if tier_thresholds else 0,
+    },
+}
+
+# 保存元数据到 HDFS
+metadata_path = "hdfs:///advice/gold/2025/metadata.json"
+metadata_json = json.dumps(metadata, ensure_ascii=False, indent=2)
+spark.sparkContext.parallelize([metadata_json]).coalesce(1).saveAsTextFile(
+    "hdfs:///advice/gold/2025/_metadata_temp"
+)
+# 也保存一份到本地（方便查看）
+import os
+local_metadata_dir = os.path.join(os.path.dirname(__file__), "..", "gold_metadata")
+os.makedirs(local_metadata_dir, exist_ok=True)
+local_metadata_path = os.path.join(local_metadata_dir, "gold_2025_metadata.json")
+with open(local_metadata_path, "w", encoding="utf-8") as f:
+    f.write(metadata_json)
+
 print("DONE:")
 print("  SILVER_CLEAN =", SILVER_CLEAN)
 print("  GOLD_BENCH_L1 =", GOLD_BENCH_L1)
@@ -308,5 +488,13 @@ print("  GOLD_TREND_LANG_BY_SALARY =", GOLD_TREND_LANG_BY_SALARY)
 print("  GOLD_TREND_DB_BY_SALARY   =", GOLD_TREND_DB_BY_SALARY)
 print("  GOLD_TREND_WEB_BY_SALARY  =", GOLD_TREND_WEB_BY_SALARY)
 print("  GOLD_TREND_PLATFORM_BY_SALARY =", GOLD_TREND_PLATFORM_BY_SALARY)
+print("  METADATA (local) =", local_metadata_path)
+print("\n=== 数据质量摘要 ===")
+print(f"  原始样本: {metadata['data_quality']['total_raw_samples']}")
+print(f"  清洗后样本: {metadata['data_quality']['total_clean_samples']}")
+print(f"  有效薪资样本: {metadata['data_quality']['valid_salary_samples']}")
+print(f"  薪资缺失率: {metadata['data_quality']['missing_rates']['salary']:.1%}")
+print(f"  全局薪资 P50: ${metadata['salary_benchmark']['global_percentiles']['p50']:,.0f}")
+print(f"  L1 覆盖组合数: {metadata['salary_benchmark']['level_coverage']['L1']['combinations']}")
 
 spark.stop()
