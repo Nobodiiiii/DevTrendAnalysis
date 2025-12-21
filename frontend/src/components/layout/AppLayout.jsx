@@ -10,8 +10,7 @@ const AppLayout = ({ children }) => {
       </main>
       <footer className="app-footer">
         <div className="app-footer-inner">
-          <span>© {new Date().getFullYear()} Career Intelligence</span>
-          <span className="app-footer-sub">Designed in an Apple-inspired style.</span>
+          <span>© {new Date().getFullYear()} 大数据领域实践第10小组</span>
         </div>
       </footer>
     </div>

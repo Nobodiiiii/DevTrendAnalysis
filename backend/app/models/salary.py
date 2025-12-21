@@ -79,9 +79,29 @@ class SalaryTrendSeries(BaseModel):
     dimension: str | None = None
 
 
+class ClusterMetricsYearly(BaseModel):
+    year: int | None = None
+    n_clusters: int
+    n_samples: int
+    inertia: float
+    silhouette_score: float | None = None
+    davies_bouldin_index: float | None = None
+
+
+class ClusterMetricsSummary(BaseModel):
+    generated_at: str | None = None
+    total_years: int
+    avg_silhouette_score: float | None = None
+    avg_davies_bouldin_index: float | None = None
+    quality_assessment: str | None = None
+    yearly_metrics: List[ClusterMetricsYearly] = []
+    interpretation: dict | None = None
+
+
 class SalaryTimelineResponse(BaseModel):
     snapshots: List[SalaryOverview]
     overall_trend: List[MedianTrendPoint]
     country_trends: List[SalaryTrendSeries]
     role_trends: List[SalaryTrendSeries]
     experience_trends: List[SalaryTrendSeries]
+    cluster_metrics: ClusterMetricsSummary | None = None

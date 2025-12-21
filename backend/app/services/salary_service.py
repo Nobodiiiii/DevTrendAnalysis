@@ -1,10 +1,14 @@
 # backend/app/services/salary_service.py
 from __future__ import annotations
 
+import json
 import sqlite3
-from typing import List
+from pathlib import Path
+from typing import List, Optional
 
 from ..models.salary import (
+    ClusterMetricsSummary,
+    ClusterMetricsYearly,
     MedianTrendPoint,
     PercentileSummary,
     RoleBenchmark,
@@ -21,6 +25,9 @@ CACHE_MISSING_MSG = (
     "Cached salary data is missing. Run data_processing/static/generate_salary_insights.py first."
 )
 SNAPSHOT_YEARS = (2016, 2021, 2025)
+
+# 聚类指标文件路径
+CLUSTER_METRICS_DIR = Path(__file__).resolve().parents[2] / "logs"
 
 
 def _available_years(conn: sqlite3.Connection) -> List[int]:
@@ -428,6 +435,41 @@ def _experience_keys(conn: sqlite3.Connection, limit: int = 5) -> List[str]:
     return [r["label"] for r in cur.fetchall()]
 
 
+def _load_cluster_metrics() -> Optional[ClusterMetricsSummary]:
+    """加载聚类质量指标摘要"""
+    summary_path = CLUSTER_METRICS_DIR / "cluster_metrics_summary.json"
+    if not summary_path.exists():
+        return None
+
+    try:
+        with open(summary_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        yearly_metrics = [
+            ClusterMetricsYearly(
+                year=m.get("year"),
+                n_clusters=m.get("n_clusters", 0),
+                n_samples=m.get("n_samples", 0),
+                inertia=m.get("inertia", 0.0),
+                silhouette_score=m.get("silhouette_score"),
+                davies_bouldin_index=m.get("davies_bouldin_index"),
+            )
+            for m in data.get("yearly_metrics", [])
+        ]
+
+        return ClusterMetricsSummary(
+            generated_at=data.get("generated_at"),
+            total_years=data.get("total_years", 0),
+            avg_silhouette_score=data.get("avg_silhouette_score"),
+            avg_davies_bouldin_index=data.get("avg_davies_bouldin_index"),
+            quality_assessment=data.get("quality_assessment"),
+            yearly_metrics=yearly_metrics,
+            interpretation=data.get("interpretation"),
+        )
+    except Exception:
+        return None
+
+
 def build_salary_timeline(conn: sqlite3.Connection) -> SalaryTimelineResponse:
     years = _available_years(conn)
     if not years:
@@ -462,10 +504,14 @@ def build_salary_timeline(conn: sqlite3.Connection) -> SalaryTimelineResponse:
         "experience",
     )
 
+    # 加载聚类质量指标
+    cluster_metrics = _load_cluster_metrics()
+
     return SalaryTimelineResponse(
         snapshots=snapshots,
         overall_trend=overall_trend,
         country_trends=country_trends,
         role_trends=role_trends,
         experience_trends=experience_trends,
+        cluster_metrics=cluster_metrics,
     )

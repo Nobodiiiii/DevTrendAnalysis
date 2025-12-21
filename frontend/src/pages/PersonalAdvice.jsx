@@ -218,13 +218,19 @@ const CAREER_TRACK_OPTIONS = [
 // 建议区渲染：更像人话 + 图表
 // =========================
 
+// 美元转人民币汇率
+const USD_TO_CNY = 7.2;
+
 const fmtMoney = (n) => {
   if (n === null || n === undefined || Number.isNaN(Number(n))) return '-';
-  try {
-    return `¥${Number(n).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`;
-  } catch {
-    return `¥${Math.round(Number(n))}`;
+  // 转换为人民币，以"万"为单位
+  const cny = Number(n) * USD_TO_CNY;
+  const wan = cny / 10000;
+  if (wan >= 1) {
+    const str = wan.toFixed(1);
+    return `¥${str.endsWith('.0') ? str.slice(0, -2) : str}万`;
   }
+  return `¥${Math.round(cny).toLocaleString()}`;
 };
 
 const fmtPct = (x) => {
@@ -337,7 +343,7 @@ const SalaryPercentileChart = ({ salary }) => {
           <div className="advice-viz-subtitle">
             对标精度：{getLevelFullText(salary.level)} · 可信度 {salary.confidence} · {salary.fx}
             <br />
-            P 表示百分位数：P50 意为有 50% 的人薪资低于此值，P75 则表示超过 75% 的人。
+            P 表示百分位数：P50 意为有 50% 的人薪资低于此值。
           </div>
         </div>
         <div className="advice-viz-meta">
@@ -1228,6 +1234,7 @@ const PersonalAdvice = () => {
           </h1>
           <p className="advice-hero-subtitle">
             这一页不是一个「打分表」，而是帮你把当下的技术栈、薪资期望和职业目标整理成一张可以对话的画像。
+            <br />
             填写完成后，建议区将由后端服务生成更个性化的路线和提示。
           </p>
           <div className="advice-hero-meta">

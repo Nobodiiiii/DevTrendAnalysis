@@ -17,21 +17,41 @@ import {
 } from 'recharts';
 import '../styles/salary-analysis.css';
 import { fetchSalaryTimeline } from '../api/salary';
+import { TREND_COLORS } from '../components/TrendChart';
+
+// 薪酬走势曲线配置
+const SALARY_TREND_LINES = [
+  { dataKey: 'median', name: 'P50 中位数', strokeWidth: 2.6 },
+  { dataKey: 'p75', name: 'P75 分位', strokeWidth: 1.8 },
+  { dataKey: 'p25', name: 'P25 分位', strokeWidth: 1.8 },
+  { dataKey: 'p90', name: 'P90 分位', strokeWidth: 1.8 },
+];
+
+// 美元转人民币汇率
+const USD_TO_CNY = 7.2;
 
 const formatMoneyShort = (value) => {
   if (value == null || Number.isNaN(value)) return '-';
-  if (value >= 1_000_000) {
-    const n = (value / 1_000_000).toFixed(1);
-    return `${n.endsWith('.0') ? n.slice(0, -2) : n}m`;
+  // 转换为人民币，以"万"为单位
+  const cny = value * USD_TO_CNY;
+  const wan = cny / 10000;
+  if (wan >= 1) {
+    const n = wan.toFixed(1);
+    return `¥${n.endsWith('.0') ? n.slice(0, -2) : n}万`;
   }
-  if (value >= 1_000) {
-    const n = (value / 1_000).toFixed(1);
-    return `${n.endsWith('.0') ? n.slice(0, -2) : n}k`;
-  }
-  return value.toLocaleString();
+  return `¥${Math.round(cny).toLocaleString()}`;
 };
 
-const moneyTick = (value) => `${formatMoneyShort(value)}`;
+const moneyTick = (value) => {
+  if (value == null || Number.isNaN(value)) return '-';
+  const cny = value * USD_TO_CNY;
+  const wan = cny / 10000;
+  if (wan >= 1) {
+    const n = wan.toFixed(0);
+    return `${n}万`;
+  }
+  return `${Math.round(cny / 1000)}k`;
+};
 
 const formatDateTime = (value) => {
   if (!value) return '--';
@@ -41,12 +61,12 @@ const formatDateTime = (value) => {
 };
 
 const clusterPalette = ['#0F62FE', '#2DD4BF', '#F97316', '#8B5CF6', '#16A34A'];
-const trendPalette = ['#0F62FE', '#16A34A', '#F97316', '#8B5CF6', '#06B6D4', '#F43F5E'];
 
-const buildWideSeries = (seriesList) => {
+const buildWideSeries = (seriesList, minYear = null) => {
   const map = {};
   seriesList.forEach((series) => {
     series.points.forEach((pt) => {
+      if (minYear && pt.year < minYear) return;
       if (!map[pt.year]) map[pt.year] = { year: pt.year };
       map[pt.year][series.name] = pt.median;
     });
@@ -141,9 +161,32 @@ const SalaryAnalysis = () => {
     </div>
   );
 
-  const renderTrendCard = (title, subtitle, seriesList) => {
+  // 高对比度颜色调色板
+  const HIGH_CONTRAST_COLORS = [
+    '#0F62FE', // 深蓝
+    '#EF4444', // 红色
+    '#10B981', // 绿色
+    '#F59E0B', // 橙色
+    '#8B5CF6', // 紫色
+    '#06B6D4', // 青色
+    '#EC4899', // 粉色
+    '#84CC16', // 黄绿
+  ];
+
+  const renderTrendCard = (title, subtitle, seriesList, minYear = null, options = {}) => {
     if (!seriesList?.length) return <p className="salary-muted">暂无可用数据</p>;
-    const merged = buildWideSeries(seriesList);
+    const merged = buildWideSeries(seriesList, minYear);
+
+    // 计算每个系列在 minYear 之后是否有数据
+    const seriesWithData = seriesList.filter((series) => {
+      if (!minYear) return true;
+      return series.points?.some((pt) => pt.year >= minYear && pt.median != null);
+    });
+
+    // Y轴范围配置
+    const { yMin, yMax } = options;
+    const yDomain = yMin != null && yMax != null ? [yMin, yMax] : undefined;
+
     return (
       <div className="salary-trend-card">
         <div className="salary-chart-header">
@@ -155,29 +198,140 @@ const SalaryAnalysis = () => {
         </div>
         <div className="salary-trend-body">
           <ResponsiveContainer>
-            <LineChart data={merged} margin={{ top: 10, right: 16, left: 4, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" tick={{ fontSize: 12 }} />
-              <YAxis tickFormatter={moneyTick} tick={{ fontSize: 12 }} />
+            <LineChart data={merged} margin={{ top: 18, right: 16, left: 0, bottom: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="year" tickMargin={10} tick={{ fontSize: 12 }} />
+              <YAxis
+                domain={yDomain}
+                tickFormatter={moneyTick}
+                tick={{ fontSize: 12 }}
+              />
               <Tooltip
                 formatter={(value, name) => [formatMoneyShort(value), name]}
                 labelFormatter={(label) => `${label} 年`}
               />
-              <Legend />
-              {seriesList.map((series, idx) => (
+              {seriesWithData.map((series, idx) => (
                 <Line
                   key={series.name}
                   type="monotone"
                   dataKey={series.name}
                   name={series.name}
-                  stroke={trendPalette[idx % trendPalette.length]}
-                  strokeWidth={2}
+                  stroke={HIGH_CONTRAST_COLORS[idx % HIGH_CONTRAST_COLORS.length]}
+                  strokeWidth={2.2}
                   dot={false}
                   activeDot={{ r: 4 }}
                 />
               ))}
             </LineChart>
           </ResponsiveContainer>
+        </div>
+        <div className="salary-trend-legend">
+          {seriesWithData.map((series, idx) => (
+            <div className="salary-trend-legend-item" key={series.name}>
+              <span
+                className="salary-trend-legend-dot"
+                style={{ background: HIGH_CONTRAST_COLORS[idx % HIGH_CONTRAST_COLORS.length] }}
+              />
+              <span className="salary-trend-legend-label">{series.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // 聚类指标展示组件
+  const clusterMetrics = timeline?.cluster_metrics;
+
+  const renderClusterMetrics = () => {
+    if (!clusterMetrics) return <p className="salary-muted">暂无聚类指标数据。请先运行 generate_salary_insights.py 生成。</p>;
+
+    const formatPct = (v, digits = 3) => {
+      if (v === null || v === undefined || Number.isNaN(Number(v))) return '-';
+      return Number(v).toFixed(digits);
+    };
+
+    const formatDateTime = (v) => {
+      if (!v) return '-';
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) return v;
+      return d.toLocaleString('zh-CN');
+    };
+
+    return (
+      <div className="salary-metrics">
+        {/* 汇总指标 */}
+        <div className="salary-metrics-section">
+          <div className="salary-metrics-section-title">聚类质量评估</div>
+          <div className="salary-metrics-grid">
+            <div className="salary-metrics-item">
+              <span className="salary-metrics-label">质量评级</span>
+              <span className="salary-metrics-value">{clusterMetrics.quality_assessment || '-'}</span>
+            </div>
+            <div className="salary-metrics-item">
+              <span className="salary-metrics-label">平均轮廓系数</span>
+              <span className="salary-metrics-value">{formatPct(clusterMetrics.avg_silhouette_score)}</span>
+            </div>
+            <div className="salary-metrics-item">
+              <span className="salary-metrics-label">平均 DB 指数</span>
+              <span className="salary-metrics-value">{formatPct(clusterMetrics.avg_davies_bouldin_index)}</span>
+            </div>
+            <div className="salary-metrics-item">
+              <span className="salary-metrics-label">覆盖年份数</span>
+              <span className="salary-metrics-value">{clusterMetrics.total_years || '-'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 各年指标 */}
+        {clusterMetrics.yearly_metrics?.length > 0 && (
+          <div className="salary-metrics-section">
+            <div className="salary-metrics-section-title">各年份聚类指标</div>
+            <div className="salary-metrics-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>年份</th>
+                    <th>聚类数</th>
+                    <th>样本量</th>
+                    <th>轮廓系数</th>
+                    <th>DB 指数</th>
+                    <th>惯性</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clusterMetrics.yearly_metrics.map((m) => (
+                    <tr key={m.year || 'latest'}>
+                      <td>{m.year || 'latest'}</td>
+                      <td>{m.n_clusters}</td>
+                      <td>{m.n_samples?.toLocaleString()}</td>
+                      <td>{formatPct(m.silhouette_score)}</td>
+                      <td>{formatPct(m.davies_bouldin_index)}</td>
+                      <td>{m.inertia?.toFixed(1)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* 指标解释 */}
+        {clusterMetrics.interpretation && (
+          <div className="salary-metrics-section">
+            <div className="salary-metrics-section-title">指标说明</div>
+            <div className="salary-metrics-interp">
+              {Object.entries(clusterMetrics.interpretation).map(([key, desc]) => (
+                <div key={key} className="salary-metrics-interp-item">
+                  <strong>{key}:</strong> {desc}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="salary-metrics-footer">
+          生成时间: {formatDateTime(clusterMetrics.generated_at)}
         </div>
       </div>
     );
@@ -186,11 +340,11 @@ const SalaryAnalysis = () => {
   return (
     <div className="salary-page">
       <section className="salary-hero">
-        <div className="salary-hero-inner">
+        <div className="salary-hero-content">
           <p className="salary-hero-kicker">Module 02</p>
           <h1 className="salary-hero-title">
             薪资全景
-            <span className="salary-hero-highlight"> · 2016-2025 多年演进</span>
+            <span className="salary-hero-highlight"> · Value Spectrum</span>
           </h1>
           <p className="salary-hero-subtitle">
             结合 2016-2025 年 Stack Overflow 调查数据，抽取关键年份切片（每 5 年）和 15 年纵向走势，
@@ -199,8 +353,6 @@ const SalaryAnalysis = () => {
           <div className="salary-hero-meta">
             <span>当前快照 {snapshot?.year || '--'} 年</span>
             <span>样本 {snapshot?.total_samples?.toLocaleString?.() || '--'}</span>
-            <span>中位薪资 {overview ? formatMoneyShort(overview.median) : '--'}</span>
-            <span>缓存时间 {formatDateTime(snapshot?.updated_at)}</span>
           </div>
         </div>
         <div className="salary-hero-badge">
@@ -250,7 +402,7 @@ const SalaryAnalysis = () => {
                   )} / ${formatMoneyShort(overview.p75)}`
                 : '--'}
             </h3>
-            <p className="salary-stat-desc">弱化极值的三分位数，更适合做谈判基准</p>
+            <p className="salary-stat-desc">弱化极值的三分位数</p>
           </div>
           <div className="salary-stat-card">
             <p className="salary-stat-label">Top 10%</p>
@@ -267,13 +419,6 @@ const SalaryAnalysis = () => {
             <p className="salary-stat-desc">均值受极值影响，慎用</p>
           </div>
         </div>
-        {snapshot?.currency_note && (
-          <div className="salary-note">
-            <strong>数据预处理：</strong> 已统一去除敏感地区（如 Taiwan），并将分位数、聚类结果写入缓存，接口免二次计算。
-            <br />
-            {snapshot.currency_note}
-          </div>
-        )}
       </section>
 
       <section className="salary-charts">
@@ -451,49 +596,6 @@ const SalaryAnalysis = () => {
             </div>
           </div>
           <div className="salary-cluster-grid">
-            <div className="salary-cluster-chart">
-              {loading && renderLoader()}
-              {error && renderError()}
-              {!loading && !error && (
-                <ResponsiveContainer>
-                  <ScatterChart margin={{ top: 8, right: 12, bottom: 12, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="center_exp"
-                      name="经验"
-                      unit=" yrs"
-                      tick={{ fontSize: 12 }}
-                    />
-                    <YAxis
-                      dataKey="center_comp"
-                      name="薪酬中心"
-                      tickFormatter={moneyTick}
-                      tick={{ fontSize: 12 }}
-                    />
-                    <ZAxis dataKey="size" range={[80, 320]} name="样本量" />
-                    <Tooltip
-                      formatter={(value, key, payload) => {
-                        const c = payload?.payload;
-                        if (key === 'center_comp') return [formatMoneyShort(value), '薪酬中心'];
-                        if (key === 'center_exp') return [`${value.toFixed(1)} yrs`, '经验'];
-                        if (key === 'size') return [c?.size, '样本量'];
-                        return [value, key];
-                      }}
-                      labelFormatter={() => '聚类中心'}
-                    />
-                    <Legend />
-                    {clusterSeries.map((c) => (
-                      <Scatter
-                        key={c.cluster_id}
-                        name={c.label}
-                        data={[c]}
-                        fill={c.color}
-                      />
-                    ))}
-                  </ScatterChart>
-                </ResponsiveContainer>
-              )}
-            </div>
             <div className="salary-cluster-list">
               {loading && renderLoader()}
               {error && renderError()}
@@ -537,35 +639,69 @@ const SalaryAnalysis = () => {
               </p>
             </div>
           </div>
-          <div className="salary-chart-body">
-            {loading && renderLoader()}
-            {error && renderError()}
-            {!loading && !error && (
-              <ResponsiveContainer>
-                <LineChart data={overallTrend} margin={{ top: 10, right: 16, left: 4, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="year" tick={{ fontSize: 12 }} />
-                  <YAxis tickFormatter={moneyTick} tick={{ fontSize: 12 }} />
-                  <Tooltip
-                    formatter={(value, key) => [formatMoneyShort(value), key.toUpperCase()]}
-                    labelFormatter={(label) => `${label} 年`}
-                  />
-                  <Legend />
-                  <Line type="monotone" dataKey="median" name="P50 中位" stroke="#0F62FE" strokeWidth={2} />
-                  <Line type="monotone" dataKey="p75" name="P75" stroke="#16A34A" strokeWidth={1.5} dot={false} />
-                  <Line type="monotone" dataKey="p25" name="P25" stroke="#F97316" strokeWidth={1.5} dot={false} />
-                  <Line type="monotone" dataKey="p90" name="P90" stroke="#8B5CF6" strokeWidth={1.5} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
+          <div className="salary-overall-grid">
+            <div className="salary-overall-chart">
+              {loading && renderLoader()}
+              {error && renderError()}
+              {!loading && !error && (
+                <ResponsiveContainer>
+                  <LineChart data={overallTrend} margin={{ top: 18, right: 16, left: 0, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="year" tickMargin={10} tick={{ fontSize: 12 }} />
+                    <YAxis tickFormatter={moneyTick} tick={{ fontSize: 12 }} />
+                    <Tooltip
+                      formatter={(value, key) => [formatMoneyShort(value), key.toUpperCase()]}
+                      labelFormatter={(label) => `${label} 年`}
+                    />
+                    {SALARY_TREND_LINES.map((line, idx) => (
+                      <Line
+                        key={line.dataKey}
+                        type="monotone"
+                        dataKey={line.dataKey}
+                        name={line.name}
+                        stroke={TREND_COLORS[idx % TREND_COLORS.length]}
+                        strokeWidth={line.strokeWidth}
+                        dot={idx === 0 ? { r: 3 } : false}
+                        activeDot={{ r: 4 }}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+            <aside className="salary-overall-sidebar">
+              <div className="salary-sidebar-header">
+                <span className="salary-sidebar-title">分位数曲线</span>
+                <span className="salary-sidebar-hint">纵向趋势对比</span>
+              </div>
+              <div className="salary-sidebar-items">
+                {SALARY_TREND_LINES.map((line, idx) => (
+                  <div className="salary-sidebar-item" key={line.dataKey}>
+                    <span
+                      className="salary-sidebar-dot"
+                      style={{ background: TREND_COLORS[idx % TREND_COLORS.length] }}
+                    />
+                    <span className="salary-sidebar-label">{line.name}</span>
+                  </div>
+                ))}
+              </div>
+            </aside>
           </div>
         </div>
 
         <div className="salary-trend-grid">
           {renderTrendCard('地区中位数走势', '选择样本量 Top 地区，查看跨年薪酬曲线。', countryTrends)}
-          {renderTrendCard('角色中位数走势', '核心角色的跨年薪酬中位数，辅助“换赛道”预期对齐。', roleTrends)}
+          {renderTrendCard('角色中位数走势', '核心角色薪酬中位数，对齐"换赛道"预期。', roleTrends, 2019, { yMin: 27778, yMax: 97222 })}
           {renderTrendCard('经验梯度走势', '不同经验梯度的薪酬中位数随年份的变化。', experienceTrends)}
         </div>
+      </section>
+
+      {/* 算法指标展示 */}
+      <section className="salary-metrics-section">
+        <details className="salary-details">
+          <summary>查看算法指标（KMeans 聚类质量）</summary>
+          {renderClusterMetrics()}
+        </details>
       </section>
     </div>
   );

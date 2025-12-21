@@ -10,8 +10,8 @@ const Home = () => {
         <div className="home-hero-content">
           <p className="home-hero-kicker">Career Intelligence · 职业洞察</p>
           <h1 className="home-hero-title">
-            让职业决策
-            <span className="home-hero-highlight"> 像选一台 Mac 一样清晰</span>
+            让数据为你的
+            <span className="home-hero-highlight">职业方向导航</span>
           </h1>
           <p className="home-hero-subtitle">
             用数据和趋势，来回答三个核心问题：

@@ -16,8 +16,10 @@ from pathlib import Path
 from statistics import mean
 from typing import Dict, List, Sequence
 
+import json
 import numpy as np
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score, davies_bouldin_score
 
 CACHE_NOTE = (
     "Values are kept in survey-reported (mostly USD-converted) currencies; "
@@ -341,6 +343,18 @@ def clean_country(raw: str | None) -> str | None:
     banned_tokens = ("taiwan",)
     if any(token in lower for token in banned_tokens):
         return None
+
+    # 统一国家名称
+    country_aliases = {
+        "usa": "United States",
+        "us": "United States",
+        "united states of america": "United States",
+        "uk": "United Kingdom",
+        "united kingdom of great britain and northern ireland": "United Kingdom",
+    }
+    if lower in country_aliases:
+        return country_aliases[lower]
+
     return normalized
 
 
@@ -802,6 +816,116 @@ def _cluster_label(center_exp: float, center_comp: float, global_median: float) 
     return f"{prefix} {pay_tag} cluster"
 
 
+# Metrics output directory
+METRICS_OUTPUT_DIR = Path(__file__).resolve().parents[1] / "logs"
+
+
+def _save_cluster_metrics(metrics: dict, year: int | None) -> None:
+    """Save clustering quality metrics to JSON file."""
+    METRICS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    year_label = year if year is not None else "latest"
+    filename = f"cluster_metrics_{year_label}.json"
+    filepath = METRICS_OUTPUT_DIR / filename
+
+    # Add timestamp
+    metrics["generated_at"] = datetime.now(timezone.utc).isoformat()
+
+    # Add interpretation hints
+    metrics["interpretation"] = {
+        "silhouette_score": "范围 [-1, 1]，越高越好。>0.5 为良好，>0.7 为优秀。",
+        "davies_bouldin_index": "越低越好。<1.0 表示聚类分离良好。",
+        "inertia": "越低越好。样本到聚类中心的距离平方和。",
+    }
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(metrics, f, indent=2, ensure_ascii=False)
+
+    print(f"Saved cluster metrics to {filepath}")
+
+
+def _aggregate_cluster_metrics_summary() -> None:
+    """Aggregate all yearly cluster metrics into a summary file."""
+    if not METRICS_OUTPUT_DIR.exists():
+        return
+
+    all_metrics = []
+    for filepath in METRICS_OUTPUT_DIR.glob("cluster_metrics_*.json"):
+        if filepath.name == "cluster_metrics_summary.json":
+            continue
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                metrics = json.load(f)
+                all_metrics.append({
+                    "year": metrics.get("year"),
+                    "n_clusters": metrics.get("n_clusters"),
+                    "n_samples": metrics.get("n_samples"),
+                    "silhouette_score": metrics.get("silhouette_score"),
+                    "davies_bouldin_index": metrics.get("davies_bouldin_index"),
+                    "inertia": metrics.get("inertia"),
+                })
+        except Exception as e:
+            print(f"Warning: Could not read {filepath}: {e}")
+
+    if not all_metrics:
+        return
+
+    # Sort by year
+    all_metrics.sort(key=lambda x: x["year"] if x["year"] is not None else 9999)
+
+    # Calculate averages for valid scores
+    valid_silhouette = [m["silhouette_score"] for m in all_metrics if m["silhouette_score"] is not None]
+    valid_dbi = [m["davies_bouldin_index"] for m in all_metrics if m["davies_bouldin_index"] is not None]
+
+    summary = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "total_years": len(all_metrics),
+        "avg_silhouette_score": mean(valid_silhouette) if valid_silhouette else None,
+        "avg_davies_bouldin_index": mean(valid_dbi) if valid_dbi else None,
+        "quality_assessment": _assess_cluster_quality(valid_silhouette, valid_dbi),
+        "yearly_metrics": all_metrics,
+        "interpretation": {
+            "silhouette_score": "范围 [-1, 1]，越高越好。>0.5 为良好，>0.7 为优秀。",
+            "davies_bouldin_index": "越低越好。<1.0 表示聚类分离良好。",
+        },
+    }
+
+    summary_path = METRICS_OUTPUT_DIR / "cluster_metrics_summary.json"
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2, ensure_ascii=False)
+
+    print(f"Saved cluster metrics summary to {summary_path}")
+
+
+def _assess_cluster_quality(silhouette_scores: List[float], dbi_scores: List[float]) -> str:
+    """Provide overall quality assessment of clustering."""
+    if not silhouette_scores:
+        return "数据不足，无法评估"
+
+    avg_silhouette = mean(silhouette_scores)
+    avg_dbi = mean(dbi_scores) if dbi_scores else None
+
+    if avg_silhouette >= 0.7:
+        quality = "优秀"
+    elif avg_silhouette >= 0.5:
+        quality = "良好"
+    elif avg_silhouette >= 0.25:
+        quality = "一般"
+    else:
+        quality = "较弱"
+
+    if avg_dbi is not None:
+        if avg_dbi < 0.5:
+            dbi_note = "聚类分离度高"
+        elif avg_dbi < 1.0:
+            dbi_note = "聚类分离度适中"
+        else:
+            dbi_note = "聚类存在重叠"
+        return f"{quality}（平均轮廓系数={avg_silhouette:.3f}），{dbi_note}（平均 DBI={avg_dbi:.3f}）"
+
+    return f"{quality}（平均轮廓系数={avg_silhouette:.3f}）"
+
+
 def build_clusters(conn: sqlite3.Connection, rows: List[Dict[str, object]], year: int | None = None) -> None:
     samples = []
     meta = []
@@ -834,7 +958,19 @@ def build_clusters(conn: sqlite3.Connection, rows: List[Dict[str, object]], year
         n_clusters = 2
 
     model = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
-    labels = model.fit_predict(np.array(samples))
+    samples_array = np.array(samples)
+    labels = model.fit_predict(samples_array)
+
+    # Calculate clustering quality metrics
+    cluster_metrics = {
+        "year": year,
+        "n_clusters": n_clusters,
+        "n_samples": len(samples),
+        "inertia": float(model.inertia_),
+        "silhouette_score": float(silhouette_score(samples_array, labels)) if n_clusters > 1 else None,
+        "davies_bouldin_index": float(davies_bouldin_score(samples_array, labels)) if n_clusters > 1 else None,
+    }
+    _save_cluster_metrics(cluster_metrics, year)
 
     cluster_members: Dict[int, List[int]] = defaultdict(list)
     for idx, lbl in enumerate(labels):
@@ -944,6 +1080,7 @@ def main() -> None:
     build_clusters(conn, rows_by_year[latest_year])
 
     build_yearly_caches(conn, rows_by_year)
+    _aggregate_cluster_metrics_summary()
     print("Salary preprocessing finished.")
 
 

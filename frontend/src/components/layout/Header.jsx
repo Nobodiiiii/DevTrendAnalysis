@@ -31,10 +31,9 @@ const Header = () => {
           onClick={() => navigate('/')}
           aria-label="回到首页"
         >
-          <img src={logoMark} alt="Logo" className="brand-logo" />
           <div className="brand-text">
-            <span className="brand-title">Career Intelligence</span>
-            <span className="brand-subtitle">职业洞察实验室</span>
+            <span className="brand-title">开发趋势分析与建议</span>
+            <span className="brand-subtitle">大数据领域实践第10小组</span>
           </div>
         </button>
 
