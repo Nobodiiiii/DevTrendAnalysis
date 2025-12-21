@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Literal
+from typing import List, Literal, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -167,6 +167,14 @@ class GoldMetadata(BaseModel):
     salary_tier: dict = None
 
 
+class AiAdviceData(BaseModel):
+    """AI 建议数据"""
+    content: Optional[str] = None
+    prompt: Optional[str] = None
+    available: bool = False
+    error: Optional[str] = None
+
+
 class AdviceResponse(BaseModel):
     userProfile: UserProfile
     salary: SalaryData = None
@@ -176,6 +184,7 @@ class AdviceResponse(BaseModel):
     metrics: MetricsData = None
     metricsFile: str = None
     goldMetadata: GoldMetadata = None
+    aiAdvice: AiAdviceData = None
 
 
 def _validate(p: AdvicePayload) -> None:
@@ -220,4 +229,6 @@ def generate_personal_advice(payload: AdvicePayload) -> AdviceResponse:
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

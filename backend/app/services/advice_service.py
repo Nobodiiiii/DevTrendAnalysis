@@ -7,7 +7,23 @@ import threading
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from openai import OpenAI
 from pyspark.sql import SparkSession, DataFrame, functions as F
+
+# =========================
+# AI Client (DeepSeek)
+# =========================
+_ai_client: Optional[OpenAI] = None
+
+def _get_ai_client() -> OpenAI:
+    """获取 AI 客户端（单例）"""
+    global _ai_client
+    if _ai_client is None:
+        _ai_client = OpenAI(
+            api_key=os.environ.get("DEEPSEEK_API_KEY", "sk-88b76e7882154dc7954d707e45856cfc"),
+            base_url="https://api.deepseek.com"
+        )
+    return _ai_client
 
 # =========================
 # Metrics output directory
@@ -533,6 +549,214 @@ def _trend_pick_chosen_popularity(
         d = r.asDict()
         out.append(f"- {d['tech']}（在该统计口径中 have≈{float(d['have_rate']):.1%}）")
     return out
+
+
+# =========================
+# AI Prompt Builder & Caller
+# =========================
+
+def _build_ai_prompt(payload: Dict[str, Any], analysis_result: Dict[str, Any]) -> str:
+    """
+    根据用户输入和数据分析结果构建 AI prompt
+    """
+    profile_type = payload.get("profileType", "")
+    tech = payload.get("techStack", {}) or {}
+    other_info = payload.get("otherInfo", {}) or {}
+
+    # 用户基本信息
+    if profile_type == "student":
+        student_profile = payload.get("studentProfile", {}) or {}
+        user_info = f"""
+## 用户背景
+- 身份：在校学生/应届毕业生
+- 期望方向：{student_profile.get("expectedTrack", "未指定")}
+- 期望薪资：{student_profile.get("expectedSalaryBand", "未透露")}
+- 学校：{student_profile.get("school", "未透露")}
+- 专业：{student_profile.get("major", "未透露")}
+"""
+    else:
+        pro_profile = payload.get("proProfile", {}) or {}
+        user_info = f"""
+## 用户背景
+- 身份：职场人士
+- 当前方向：{pro_profile.get("track", "未指定")}
+- 工作年限：{pro_profile.get("years", "未透露")} 年
+- 当前薪资：{pro_profile.get("salaryBand", "未透露")}
+- 公司规模：{pro_profile.get("companySize", "未透露")}
+"""
+
+    # 用户技术栈
+    sel_lang = tech.get("languages", []) or []
+    sel_db = tech.get("databases", []) or []
+    sel_web = tech.get("webframes", []) or []
+    sel_platform = tech.get("platforms", []) or []
+
+    tech_stack_info = f"""
+## 用户当前技术栈
+- 编程语言：{", ".join(sel_lang) if sel_lang else "未填写"}
+- 数据库：{", ".join(sel_db) if sel_db else "未填写"}
+- Web框架：{", ".join(sel_web) if sel_web else "未填写"}
+- 平台/工具：{", ".join(sel_platform) if sel_platform else "未填写"}
+"""
+
+    # 用户补充信息
+    user_note = other_info.get("note", "").strip()
+    note_info = ""
+    if user_note:
+        note_info = f"""
+## 用户补充说明
+{user_note}
+"""
+
+    # 薪资分析
+    salary_info = ""
+    salary_data = analysis_result.get("salary")
+    if salary_data:
+        salary_info = f"""
+## 薪资市场数据（基于 {salary_data.get('n', 0)} 个样本，可信度：{salary_data.get('confidence', '未知')}）
+- 25分位：¥{salary_data.get('p25', 0):,.0f}/年
+- 中位数：¥{salary_data.get('p50', 0):,.0f}/年
+- 75分位：¥{salary_data.get('p75', 0):,.0f}/年
+- 90分位：¥{salary_data.get('p90', 0):,.0f}/年
+"""
+        user_salary = salary_data.get("userSalaryBand")
+        if user_salary and user_salary.get("text"):
+            salary_info += f"- 用户期望/当前薪资：{user_salary.get('text')}\n"
+
+    # 技术推荐分析
+    tech_data = analysis_result.get("tech", {})
+    tech_reco_info = ""
+
+    def format_reco_items(items: List[Dict], category: str) -> str:
+        if not items:
+            return ""
+        lines = [f"\n### {category}"]
+        for item in items:
+            lines.append(f"  - {item['tech']}：want {item['want']:.1%} vs have {item['have']:.1%}，gap {item['gap']:+.1%}")
+        return "\n".join(lines)
+
+    if tech_data:
+        tech_reco_info = "\n## 技术趋势分析（基于 Stack Overflow 全球开发者调查数据）\n"
+
+        # 主流技术推荐
+        lang_main = tech_data.get("language", {}).get("mainstream", [])
+        db_main = tech_data.get("database", {}).get("mainstream", [])
+        web_main = tech_data.get("webframe", {}).get("mainstream", [])
+        platform_main = tech_data.get("platform", {}).get("mainstream", [])
+
+        if any([lang_main, db_main, web_main, platform_main]):
+            tech_reco_info += "\n**主流技术推荐（用户尚未掌握的高需求技术）：**"
+            tech_reco_info += format_reco_items(lang_main, "编程语言")
+            tech_reco_info += format_reco_items(db_main, "数据库")
+            tech_reco_info += format_reco_items(web_main, "Web框架")
+            tech_reco_info += format_reco_items(platform_main, "平台/工具")
+
+        # 潜力技术推荐
+        lang_gap = tech_data.get("language", {}).get("gap", [])
+        db_gap = tech_data.get("database", {}).get("gap", [])
+        web_gap = tech_data.get("webframe", {}).get("gap", [])
+        platform_gap = tech_data.get("platform", {}).get("gap", [])
+
+        if any([lang_gap, db_gap, web_gap, platform_gap]):
+            tech_reco_info += "\n\n**潜力技术推荐（想学的人多但掌握的人少）：**"
+            tech_reco_info += format_reco_items(lang_gap, "编程语言")
+            tech_reco_info += format_reco_items(db_gap, "数据库")
+            tech_reco_info += format_reco_items(web_gap, "Web框架")
+            tech_reco_info += format_reco_items(platform_gap, "平台/工具")
+
+    # 进阶建议
+    advancement_info = ""
+    advancement_data = analysis_result.get("advancement")
+    if advancement_data and advancement_data.get("available"):
+        advancement_info = f"""
+## 进阶路径分析
+从 {advancement_data.get('currentLevel')} 年经验 → {advancement_data.get('targetLevel')} 年经验的人群，以下技术更普及：
+"""
+        def format_adv_items(items: List[Dict], category: str) -> str:
+            if not items:
+                return ""
+            lines = [f"- {category}："]
+            for item in items:
+                lines.append(f"  - {item['tech']}：当前人群 {item['currentHave']:.1%} → 进阶人群 {item['targetHave']:.1%}（+{item['lift']:.1%}）")
+            return "\n".join(lines) + "\n"
+
+        advancement_info += format_adv_items(advancement_data.get("language", []), "编程语言")
+        advancement_info += format_adv_items(advancement_data.get("database", []), "数据库")
+        advancement_info += format_adv_items(advancement_data.get("webframe", []), "Web框架")
+        advancement_info += format_adv_items(advancement_data.get("platform", []), "平台/工具")
+
+    # 高薪技术差异
+    salary_tier_info = ""
+    salary_tier_data = analysis_result.get("salaryTierTech")
+    if salary_tier_data and salary_tier_data.get("available"):
+        salary_tier_info = """
+## 高薪人群技术特征
+以下是高薪人群（前33%）相比低薪人群（后33%）更普遍掌握的技术：
+"""
+        def format_tier_items(category_data: Dict, category: str) -> str:
+            missing = category_data.get("missing", [])
+            has_items = category_data.get("has", [])
+            if not missing and not has_items:
+                return ""
+            lines = [f"- {category}："]
+            if missing:
+                lines.append("  用户待学习：")
+                for item in missing:
+                    lines.append(f"    - {item['tech']}：高薪 {item['highHave']:.1%} vs 低薪 {item['lowHave']:.1%}（+{item['diff']:.1%}）")
+            if has_items:
+                lines.append("  用户已掌握：")
+                for item in has_items:
+                    lines.append(f"    - {item['tech']}（优势技术）")
+            return "\n".join(lines) + "\n"
+
+        salary_tier_info += format_tier_items(salary_tier_data.get("language", {}), "编程语言")
+        salary_tier_info += format_tier_items(salary_tier_data.get("database", {}), "数据库")
+        salary_tier_info += format_tier_items(salary_tier_data.get("webframe", {}), "Web框架")
+        salary_tier_info += format_tier_items(salary_tier_data.get("platform", {}), "平台/工具")
+
+    # 组装完整 prompt
+    prompt = f"""你是一位资深的技术职业规划顾问。请根据以下用户信息和数据分析结果，给出个性化的职业发展建议。
+
+{user_info}
+{tech_stack_info}
+{note_info}
+{salary_info}
+{tech_reco_info}
+{advancement_info}
+{salary_tier_info}
+
+---
+
+请基于以上数据，为该用户提供：
+1. **职业定位评估**：根据用户当前技术栈，评估其在市场中的竞争力
+2. **薪资发展建议**：结合薪资数据，给出合理的薪资期望和提升路径
+3. **技术学习路线**：优先推荐 2-3 个最值得投入学习的技术，并说明原因
+4. **职业发展建议**：针对用户的具体情况，给出 1-2 条可操作的职业发展建议
+
+请用简洁、专业的语言回答，控制在 500 字以内。
+"""
+    return prompt
+
+
+def _call_ai_for_advice(prompt: str) -> str:
+    """
+    调用 AI 生成建议，失败时抛出异常
+    """
+    client = _get_ai_client()
+    response = client.chat.completions.create(
+        model="deepseek-chat",  # 使用 deepseek-chat 模型，速度更快
+        messages=[
+            {
+                "role": "system",
+                "content": "你是一位专业的技术职业规划顾问，擅长分析开发者的技术栈和职业发展路径。你的建议应该基于数据，务实且可操作。"
+            },
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.7,
+        max_tokens=1000,
+        stream=False
+    )
+    return response.choices[0].message.content
 
 
 # =========================
@@ -1062,8 +1286,8 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
     # 加载 Gold 元数据
     gold_metadata = _load_gold_metadata()
 
-    # 返回纯数据结构（包含指标）
-    return {
+    # 构建基础返回结构（用于 AI prompt）
+    base_result = {
         "userProfile": {
             "profileType": profile_type,
             "workexpBin": wb,
@@ -1078,3 +1302,24 @@ def generate_advice(payload: Dict[str, Any]) -> Dict[str, Any]:
         "metricsFile": metrics_file,
         "goldMetadata": gold_metadata,
     }
+
+    # ===== 调用 AI 生成个性化建议 =====
+    ai_advice = None
+    ai_prompt = None
+    ai_error = None
+    try:
+        ai_prompt = _build_ai_prompt(payload, base_result)
+        ai_advice = _call_ai_for_advice(ai_prompt)
+    except Exception as e:
+        ai_error = str(e)
+        print(f"[AI Advice Generation Error] {e}")
+
+    # 返回完整数据结构（包含 AI 建议）
+    base_result["aiAdvice"] = {
+        "content": ai_advice,
+        "prompt": ai_prompt,  # 可选：调试用，生产环境可移除
+        "available": ai_advice is not None,
+        "error": ai_error,
+    }
+
+    return base_result

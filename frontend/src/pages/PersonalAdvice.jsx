@@ -218,13 +218,10 @@ const CAREER_TRACK_OPTIONS = [
 // 建议区渲染：更像人话 + 图表
 // =========================
 
-// 美元转人民币汇率
-const USD_TO_CNY = 7.2;
-
+// 格式化人民币金额（后端已返回 CNY）
 const fmtMoney = (n) => {
   if (n === null || n === undefined || Number.isNaN(Number(n))) return '-';
-  // 转换为人民币，以"万"为单位
-  const cny = Number(n) * USD_TO_CNY;
+  const cny = Number(n);
   const wan = cny / 10000;
   if (wan >= 1) {
     const str = wan.toFixed(1);
@@ -254,15 +251,17 @@ const RichTextBlock = ({ text }) => {
   const lines = String(text || '').split(/\n/).filter((l) => l !== null && l !== undefined);
   const nodes = [];
   let list = [];
+  let listType = 'ul'; // 'ul' 或 'ol'
 
   const flushList = () => {
     if (!list.length) return;
+    const ListTag = listType === 'ol' ? 'ol' : 'ul';
     nodes.push(
-      <ul className="advice-rt-list" key={`ul-${nodes.length}`}>
+      <ListTag className={`advice-rt-list advice-rt-list-${listType}`} key={`list-${nodes.length}`}>
         {list.map((it, idx) => (
           <li key={idx}>{renderInlineBold(it)}</li>
         ))}
-      </ul>
+      </ListTag>
     );
     list = [];
   };
@@ -276,24 +275,56 @@ const RichTextBlock = ({ text }) => {
       return;
     }
 
-    // 标题：**xxx**
-    const head = line.match(/^\*\*(.+?)\*\*$/);
-    if (head) {
+    // Markdown 标题：# ## ### ####
+    const mdHead = line.match(/^(#{1,4})\s+(.+)$/);
+    if (mdHead) {
+      flushList();
+      const level = mdHead[1].length; // 1-4
+      const HeadTag = `h${level + 2}`; // h3-h6
+      nodes.push(
+        React.createElement(
+          HeadTag,
+          { className: `advice-rt-h advice-rt-h${level}`, key: `h-${idx}` },
+          renderInlineBold(mdHead[2])
+        )
+      );
+      return;
+    }
+
+    // 独立粗体行作为标题：**xxx**
+    const boldHead = line.match(/^\*\*(.+?)\*\*$/);
+    if (boldHead) {
       flushList();
       nodes.push(
-        <h4 className="advice-rt-h" key={`h-${idx}`}>
-          {head[1]}
+        <h4 className="advice-rt-h advice-rt-h-bold" key={`h-${idx}`}>
+          {boldHead[1]}
         </h4>
       );
       return;
     }
 
-    // 列表：- xxx
-    if (line.startsWith('- ')) {
-      list.push(line.slice(2).trim());
+    // 数字列表：1. xxx 或 1) xxx
+    const numList = line.match(/^(\d+)[.)]\s+(.+)$/);
+    if (numList) {
+      if (listType !== 'ol') {
+        flushList();
+        listType = 'ol';
+      }
+      list.push(numList[2].trim());
       return;
     }
 
+    // 无序列表：- xxx 或 * xxx
+    if (line.match(/^[-*]\s+/)) {
+      if (listType !== 'ul') {
+        flushList();
+        listType = 'ul';
+      }
+      list.push(line.replace(/^[-*]\s+/, '').trim());
+      return;
+    }
+
+    // 普通段落
     flushList();
     nodes.push(
       <p className="advice-rt-p" key={`p-${idx}`}>
@@ -1082,20 +1113,20 @@ const PersonalAdvice = () => {
   const generateAiSummary = useMemo(() => {
     if (!adviceData) return '';
 
-    const { salary } = adviceData;
-    const lines = [];
+    const aiAdvice = adviceData.aiAdvice;
 
-    lines.push('**下一步建议（直接照做版）**');
-
-    if (salary) {
-      lines.push(`- 薪资目标：先把预期对齐到 **P50（约 ${fmtMoney(salary.p50)}/年）**，有强项目再冲 **P75（约 ${fmtMoney(salary.p75)}/年）**。`);
+    // aiAdvice 字段不存在
+    if (!aiAdvice) {
+      return '**AI 建议未返回**\n\n后端未返回 aiAdvice 字段，请检查后端服务。';
     }
 
-    lines.push('- 项目打法：用 1 个主项目把"选型 → 方案 → 结果"讲完整（最好能量化：性能/成本/转化/稳定性）。');
-    lines.push('- 技术策略：主流地基选 2–3 个稳住面试，通过后再用 1 个加分项拉开差距。');
-    lines.push('- 面试表达：用 STAR（背景-任务-行动-结果）把故事讲短讲清，避免只堆技术名词。');
+    // 使用后端返回的 AI 建议
+    if (aiAdvice.available && aiAdvice.content) {
+      return aiAdvice.content;
+    }
 
-    return lines.join('\n');
+    // AI 调用失败时显示错误信息
+    return `**AI 建议生成失败**\n\n${aiAdvice.error || '请稍后重试，或检查网络连接。'}`;
   }, [adviceData]);
 
   const handleTechToggle = (group, value) => {
@@ -1599,7 +1630,7 @@ const PersonalAdvice = () => {
               </div>
             </div>
             <div className="advice-suggestion-body">
-              {!hasGenerated || !generateAiSummary ? emptyHint : <AdviceChecklist text={generateAiSummary} />}
+              {!hasGenerated || !generateAiSummary ? emptyHint : <RichTextBlock text={generateAiSummary} />}
             </div>
           </div>
         </div>
